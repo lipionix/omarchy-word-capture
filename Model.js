@@ -70,6 +70,38 @@ function characterSuggestions(text) {
   return characterPresets.filter(function(name) { return name.indexOf(query) !== -1 })
 }
 
+// Same rule as append.py: "~" is home, and a relative path is under home.
+function resolvePath(path, home) {
+  var p = String(path || "").trim()
+  if (!p) return ""
+  if (p === "~") return home
+  if (p.indexOf("~/") === 0) return home + p.slice(1)
+  return p.charAt(0) === "/" ? p : home + "/" + p
+}
+
+// How two captures compare: unescaped, trimmed, single-spaced, any case.
+function normalizeWord(value) {
+  return unescapeMarkdown(value).trim().replace(/\s+/g, " ").toLowerCase()
+}
+
+// Every "- **word**" in the file, as a set of normalized words. Lines that
+// are not captures (headings, notes) are skipped.
+function capturedWords(text) {
+  var set = {}
+  var lines = String(text || "").split("\n")
+  var pattern = /^\s*[-*+]\s+\*\*((?:\\.|[^\\*])+)\*\*/
+  for (var i = 0; i < lines.length; i++) {
+    var match = pattern.exec(lines[i])
+    if (match) set[normalizeWord(match[1])] = true
+  }
+  return set
+}
+
+function isCaptured(set, word) {
+  var key = normalizeWord(word)
+  return key !== "" && set !== null && typeof set === "object" && set[key] === true
+}
+
 // "~/Documents/word.md" -> "word.md", for the panel's meta line.
 function fileName(path) {
   var parts = String(path || "").trim().split("/")

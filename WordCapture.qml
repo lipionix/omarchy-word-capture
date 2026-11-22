@@ -29,6 +29,10 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string fileName: Model.fileName(filePath)
+  readonly property string home: Quickshell.env("HOME")
+  // Normalized words already in the file, kept live by wordsFile below.
+  property var captured: ({})
+  readonly property bool alreadyCaptured: Model.isCaptured(captured, word)
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
@@ -78,6 +82,8 @@ Panel {
     writing = false
     if (!ok) { error = message || "Could not write to " + filePath; return }
     notify("Captured " + word.trim(), fileName)
+    // A file created by this capture had nothing to watch before it existed.
+    wordsFile.reload()
     word = ""
     context = ""
     pendingEntry = ""
@@ -123,6 +129,17 @@ Panel {
     atomicWrites: true
     printErrors: false
     onLoaded: root.loadState(text())
+  }
+
+  // The words file, read and watched in-shell for the "Already captured" hint.
+  FileView {
+    id: wordsFile
+    path: Model.resolvePath(root.filePath, root.home)
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.captured = Model.capturedWords(text())
+    onLoadFailed: root.captured = ({})
   }
 
   // A Process that reports once it has exited AND both streams have ended:
@@ -252,6 +269,15 @@ Panel {
             foreground: root.foreground
             onTextChanged: { root.word = text; root.error = ""; root.updateDetection() }
             onAccepted: root.submit()
+          }
+          // Saving stays allowed: the same word with new context is fine.
+          Text {
+            visible: root.alreadyCaptured
+            textFormat: Text.PlainText
+            text: "Already captured"
+            color: root.dim
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
           }
 
           PanelSectionHeader { text: "CONTEXT / EXAMPLE"; foreground: root.foreground }

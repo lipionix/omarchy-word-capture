@@ -42,4 +42,41 @@ test("file name for the meta line", () => {
   assert.strictEqual(M.fileName(""), "")
 })
 
+test("parses captured words from the file", () => {
+  const file = [
+    "# Vocabulary",
+    "- **Casa** [Spanish] — la casa",
+    "- **snake\\_case** [English]",
+    "- **\\*\\*x\\*\\*** [English] — escaped stars",
+    "  * **Привет**  [Russian]",
+    "Some prose with **bold** text",
+    "- **two  words**",
+    "",
+  ].join("\n")
+  const set = M.capturedWords(file)
+  assert.ok(M.isCaptured(set, "casa"))
+  assert.ok(M.isCaptured(set, "  CASA "))
+  assert.ok(M.isCaptured(set, "snake_case"))
+  assert.ok(M.isCaptured(set, "**x**"))
+  assert.ok(M.isCaptured(set, "привет"))
+  assert.ok(M.isCaptured(set, "two words"))
+  assert.ok(!M.isCaptured(set, "bold"))
+  assert.ok(!M.isCaptured(set, "vocabulary"))
+  assert.ok(!M.isCaptured(set, ""))
+})
+
+test("a written line is found again", () => {
+  for (const w of ["snake_case", "a*b", "back\\slash", "Ñandú", "two words"]) {
+    const set = M.capturedWords(M.entryLine({ text: w, note: "n_o*te", tag: "X" }))
+    assert.ok(M.isCaptured(set, w), w)
+  }
+})
+
+test("resolves paths like append.py", () => {
+  assert.strictEqual(M.resolvePath("~/Documents/word.md", "/home/a"), "/home/a/Documents/word.md")
+  assert.strictEqual(M.resolvePath("notes/w.md", "/home/a"), "/home/a/notes/w.md")
+  assert.strictEqual(M.resolvePath("/tmp/w.md", "/home/a"), "/tmp/w.md")
+  assert.strictEqual(M.resolvePath(" ", "/home/a"), "")
+})
+
 console.log(passed + " passed")
