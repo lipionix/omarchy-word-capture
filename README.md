@@ -1,127 +1,122 @@
 # Word Capture
 
-An Omarchy bar widget for collecting vocabulary. Click the book icon, type a
-word, optionally add context, press Enter. One Markdown line goes to the end
-of its language's section in your vocabulary file, and a toast confirms it with
-your counts, e.g. "128 words, 42 in Spanish" ("Already had it. 128 words, 42
-in Spanish" when the word was in the file already). Click the toast to open the file.
+A bar widget for [Omarchy](https://omarchy.org) that collects vocabulary into
+a Markdown file. Click the book icon in the bar, type a word or phrase, add some
+context or a note if you like, press Enter. The entry goes under its language's heading,
+and a notification confirms it.
 
-```markdown
-# Vocabulary            <- anything outside sections is left alone
-
-## Spanish
-
-- **casa** [Spanish] — la casa es grande
-- **perro** [Spanish]   <- new Spanish entries land here
-
-## Russian
-
-- **дом** [Russian]
-```
-
-A missing `## <Language>` section is created at the end of the file. The
-`[Language]` tag stays in every line, so a line moved elsewhere keeps its
-language. Text outside sections (a title, notes) is left as it is.
-
-`\`, `*` and `_` in the word and the context are backslash-escaped, so
-`snake_case` or `**x**` cannot break the bold word. A multi-line context
-stays one list line, its lines joined with ` / `.
-
-## Use
-
-| Key / action        | Does                                                   |
-|---------------------|--------------------------------------------------------|
-| Click bar icon      | Open or close the panel (word field focused)           |
-| Right-click icon    | Open the words file in the Omarchy default editor (`omarchy-launch-editor`); a missing file is created empty |
-| File name in header | Same as right-click: opens the words file              |
-| Enter               | Capture (from the word or context field), close, toast |
-| Shift+Enter         | New line in the context field (grows to 5 lines, then scrolls) |
-| Esc / click outside | Close; the draft is kept for next time                 |
-| Settings (gear)     | Words file (edit the path; the folder icon picks its folder and keeps the file name; the panel comes back with the name selected; "Created on first capture" shows next to MARKDOWN FILE while the path points at no file yet), clipboard prefill, languages |
-
-- **Already captured**: while you type, the word field's border takes the
-  theme's yellow (`colors.toml` `yellow`, at the field's normal border width)
-  and a dim hint shows when the word is already in the file. Saving is still
-  allowed. See *How matching works* below.
-- **Prefill from clipboard** (Settings, off by default): choose the field it
-  fills, Word (default) or Context. Opening the panel with that field empty
-  fills it; text kept in the other field does not stop it. Word gets the
-  clipboard's first line and the focus moves to Context; Context gets the text
-  with its lines (up to 2000 characters) and the focus stays on Word. Images
-  and other non-text clipboards are ignored.
-- **Language** is picked from the script of the word. In Settings each
-  language is one line: name, script (Latin, Cyrillic, Greek, Arabic, Hebrew,
-  Any, or Custom… with a character class such as `A-Za-zÀ-ÿ`), and a remove
-  button, plus up/down buttons to reorder. Order is priority:
-  when several languages match the word's script, the first one in the list is
-  selected. Picking one by hand sticks for the current word.
-- **Errors** (no permission, path is a folder, ...) show under the Capture
-  button and the panel stays open with your text.
-
-## How matching works
-
-**Language detection.** The word (not the context) is NFC-normalized, so a
-decomposed `e` + accent counts as `é`. Then only its letters are compared:
-spaces, digits, punctuation (apostrophes and hyphens: `don't`, `rock-n-roll`),
-symbols, emoji and combining marks are skipped. A language matches when every
-letter is in its set; a word with no letters matches none. Sets:
-
-| Script   | Letters                                                       |
-|----------|---------------------------------------------------------------|
-| Latin    | A–Z, a–z, U+00C0–024F (accents, ñ, ß, …), U+1E00–1EFF (Vietnamese) |
-| Cyrillic | U+0400–052F (ё included), U+1C80–1C8F, U+2DE0–2DFF, U+A640–A69F |
-| Greek    | U+0370–03FF, U+1F00–1FFF                                       |
-| Arabic   | U+0600–06FF, U+0750–077F, U+08A0–08FF, U+FB50–FDFF, U+FE70–FEFF |
-| Hebrew   | U+0590–05FF, U+FB1D–FB4F                                       |
-| Any      | every letter                                                   |
-| Custom…  | your set, e.g. `A-Za-zÀ-ÿ`                                     |
-
-A custom set is read character by character, never as a regular expression:
-`x-y` is a range, a backslash escapes the next character (`\-`, `\]`, `\\`) or
-spells one (`\u00e9`, `\u{1F600}`, `\x41`), and `[`, `]`, `^` are plain
-characters. A broken set (a reversed range like `z-a`, a bad escape) matches
-nothing; it never throws. Parsed sets are cached. When several languages
-match, the first in the list wins.
-
-**Duplicate search.** Each `- **word**` line in the file becomes a key: escapes
-removed, NFC, trimmed, runs of spaces collapsed, lower-cased with the
-locale-independent `toLowerCase` (so `Casa` = `casa`, `Ёж` = `ёж`). `ё` and `е`
-are different words, and `ß` is not folded to `ss`. The keys sit in a hash map,
-so each keystroke costs one normalization of the typed word and one lookup,
-whatever the file size. A line's language for the counts is its `[Tag]`, else
-the `## ` section it is in.
-
-**When the file is read.** Never before the panel is first opened. After that
-the file is watched (inotify, no polling) and re-parsed only when it changes:
-about 2 ms for 1,000 entries, about 80–200 ms for 50,000. Saving does not spawn
-Python: `append.sh` is plain `sh` + `awk` + `flock`.
-
-## Files
-
-- `WordCapture.qml` — bar button and panel, built from the shell's own
-  `Panel`, `KeyboardPanel`, `PanelSectionHeader`, `PanelActionButton`,
-  `Dropdown`, `Toggle`, `TextField`.
-- `Model.js` — language detection and script presets, `entryLine()` (the one place that defines
-  the line format), escaping, the words index (duplicates and counts per tag), clipboard cleanup.
-- `append.sh` — adds one line at the end of its `## <Language>` section
-  (`--touch` only creates the file):
-  expands `~`, resolves relative paths against `$HOME`, follows a symlink,
-  creates missing folders, writes a temp file with the original's permissions
-  and renames it over the file (atomic), locks the folder (`flock`) against
-  concurrent writers. Plain `sh` + `awk`, no Python start-up.
-- `tests/model.test.js` — logic tests: `node tests/model.test.js`.
-- `tests/append.test.sh` — file-writing tests: `sh tests/append.test.sh`.
-- State: `~/.local/state/omarchy/word-capture.json` (`filePath`, `languages`,
-  `language`, `prefillClipboard`, `prefillTarget`). Missing keys take their
-  defaults, so older state files keep working.
+![Word Capture panel](preview.png)
 
 ## Install
 
-Place this folder at `~/.config/omarchy/plugins/alexander.word-capture/` and
-add `{ "id": "alexander.word-capture" }` to a bar section in
-`~/.config/omarchy/shell.json`. After editing the QML, run
-`omarchy restart shell`: the shell notices local plugin changes, but a running
-shell can keep the previously compiled QML.
+```sh
+omarchy plugin add <repository-url> --enable
+```
 
-Requires `wl-clipboard` and Omarchy's `omarchy-file-select` (both present on
-Omarchy).
+Pick a bar section when asked (it defaults to the right). To place it later:
+`omarchy plugin enable alexander.word-capture --section right`.
+
+Everything it needs ships with Omarchy: `sh`, `awk`, `flock`, `wl-paste`
+(wl-clipboard), `omarchy-file-select`, `omarchy-launch-editor` and
+`omarchy-notification-send`.
+
+## Use
+
+| Action                  | Does                                                        |
+|-------------------------|-------------------------------------------------------------|
+| Click the bar icon      | Open or close the panel, with the word field focused        |
+| Right-click the icon    | Open the words file in your editor (created if missing)     |
+| Click the file name     | Same, from the panel header                                 |
+| Enter                   | Save, close the panel, show a notification                  |
+| Shift+Enter             | New line in the context field (it grows to 5 lines, then scrolls) |
+| Esc or click outside    | Close; what you typed is kept for next time                 |
+| Click the notification  | Open the words file                                         |
+| Gear icon               | Settings                                                    |
+
+**Language.** The language is picked from the alphabet of the word: Latin,
+Cyrillic, Greek, Arabic, Hebrew, any letter, or your own set of characters.
+When several languages match, the names next to LANGUAGE show them; click one
+or use the dropdown to choose, and your choice holds for that word.
+
+**Already captured.** While you type a word that is already in the file, the
+word field gets a yellow border and a hint says so. You can still save it.
+
+**Settings.**
+
+- *Markdown file*: the path of your words file (default
+  `~/Documents/words.md`). Edit it, or use the folder button to choose a
+  folder; the file name stays and is selected so you can rename it. "Created
+  on first capture" shows when the file does not exist yet.
+- *Prefill from clipboard* (off by default): when the panel opens, put the
+  clipboard text into the Word or the Context field, only if that field is
+  empty. The cursor then goes to the other field.
+- *Languages*: name, alphabet, and order. Use the up and down arrows to
+  reorder; the first match in the list is selected by default.
+
+## File format
+
+One line per entry, under a `## <Language>` heading. New entries go to the
+end of their section; a missing section is added at the end of the file. Any
+other text in the file is left as it is.
+
+```markdown
+## Spanish
+
+- **casa** [Spanish] — la casa es grande
+- **perro** [Spanish]
+
+## Russian
+
+- **дом** [Russian] — мой дом
+```
+
+`*`, `_` and `\` in an entry are escaped so they cannot break the Markdown.
+Context with several lines is saved on one line, its lines joined with ` / `.
+Saving is atomic and locked, so the file is never left half-written.
+
+## Privacy
+
+Word Capture reads only the file you set and its own settings. With
+*Prefill from clipboard* on, it reads the clipboard (`wl-paste`) each time
+the panel opens; the text is used only to fill the field and is not stored
+unless you save it. Nothing is sent anywhere.
+
+## Uninstall
+
+```sh
+omarchy plugin remove alexander.word-capture
+rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/word-capture.json"
+```
+
+The second line removes the settings. Your words file is never touched.
+
+## Details
+
+- **Matching a language.** Only the word's letters count: spaces, digits,
+  punctuation (`don't`, `rock-n-roll`), symbols and emoji are skipped, and
+  text is Unicode-normalized (NFC) first. A custom set reads like
+  `A-Za-zÀ-ÿ`: ranges with `-`, `\` to escape a character or spell one
+  (`\u00e9`). It is never run as a regular expression; a broken set matches
+  nothing.
+- **Duplicates.** Words are compared case-insensitively after normalizing
+  Unicode and spaces, so `Casa` equals `casa`.
+- **Cost.** Nothing is read before the panel is first opened. After that the
+  file is watched and re-read only when it changes (about 2 ms per thousand
+  entries).
+- **Settings file.** `${XDG_STATE_HOME:-~/.local/state}/omarchy/word-capture.json`.
+  Missing or unreadable settings fall back to the defaults.
+
+## Development
+
+- `WordCapture.qml`: the bar button and panel, built from the shell's own
+  components.
+- `Model.js`: language detection, entry format, duplicate index, clipboard
+  cleanup.
+- `append.sh`: writes one entry into its section (temp file, atomic rename,
+  `flock`).
+- Tests: `sh tests/run.sh` (needs `node`).
+- After editing the QML, run `omarchy restart shell`.
+
+## License
+
+To be added.
