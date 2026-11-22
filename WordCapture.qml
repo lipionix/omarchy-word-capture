@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as QQC
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -342,15 +343,55 @@ Panel {
           }
 
           PanelSectionHeader { text: "CONTEXT / EXAMPLE"; foreground: root.foreground }
-          TextField {
-            id: contextField
+          // Multi-line context, styled like the shell's TextField: grows to five
+          // lines, then scrolls. Enter captures, Shift+Enter adds a line.
+          Flickable {
+            id: contextFlick
             width: parent.width
-            text: root.context
-            placeholderText: "Meaning or an example sentence"
-            foreground: root.foreground
-            onTextChanged: root.context = text
-            onAccepted: root.submit()
+            height: Math.min(contextField.implicitHeight,
+              contextMetrics.lineSpacing * 5 + contextField.topPadding + contextField.bottomPadding)
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            QQC.TextArea.flickable: QQC.TextArea {
+              id: contextField
+              readonly property var _borderSpec: Border.controlSpec(activeFocus ? "focus" : (hovered ? "hover-cursor" : "normal"), root.foreground, Commons.Color.accent)
+              text: root.context
+              placeholderText: "Meaning or an example · Shift+Enter for a new line"
+              wrapMode: TextEdit.Wrap
+              hoverEnabled: true
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              color: root.foreground
+              selectionColor: Style.selectionFillFor(root.foreground, Commons.Color.accent)
+              selectedTextColor: root.foreground
+              placeholderTextColor: Qt.darker(root.foreground, 1.6)
+              leftPadding: Style.spacing.controlPaddingX + Border.left(_borderSpec)
+              rightPadding: Style.spacing.controlPaddingX + Border.right(_borderSpec)
+              topPadding: Style.spacing.inputPaddingY + Border.top(_borderSpec)
+              bottomPadding: Style.spacing.inputPaddingY + Border.bottom(_borderSpec)
+              background: BorderSurface {
+                color: Style.controlFill(contextField.activeFocus, contextField.hovered, root.foreground, Commons.Color.accent)
+                borderSpec: contextField._borderSpec
+                radius: Style.cornerRadius
+              }
+              onTextChanged: root.context = text
+              Keys.onPressed: function(event) {
+                var enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                if (enter && !(event.modifiers & Qt.ShiftModifier)) {
+                  event.accepted = true
+                  root.submit()
+                } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                  // Tab moves on, as in the other fields, instead of typing a tab.
+                  event.accepted = true
+                  var back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier)
+                  var next = contextField.nextItemInFocusChain(!back)
+                  if (next) next.forceActiveFocus()
+                }
+              }
+            }
           }
+          FontMetrics { id: contextMetrics; font: contextField.font }
 
           Row {
             width: parent.width

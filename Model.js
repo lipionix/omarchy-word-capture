@@ -170,11 +170,15 @@ function unescapeMarkdown(value) {
 }
 
 // The one place that decides how a capture looks in the Markdown file:
-// "- **text** [tag] — note". Takes named fields so the format can change
+// "- **text** [tag] — note", always a single line. Takes named fields so the format can change
 // without touching the panel or the writer (append.py).
 function entryLine(fields) {
   var text = escapeMarkdown(safeText(fields.text, 500).trim().replace(/\s*\r?\n\s*/g, " "))
-  var note = escapeMarkdown(safeText(fields.note, 2000).trim().replace(/\s*\r?\n\s*/g, " "))
+  // A multi-line note stays one list line: its lines are joined with " / ".
+  var note = escapeMarkdown(safeText(fields.note, 2000).split(/\r?\n/)
+    .map(function(line) { return line.trim() })
+    .filter(function(line) { return line !== "" })
+    .join(" / "))
   var tag = safeText(fields.tag, 80).trim()
   return "- **" + text + "**" + (tag ? " [" + tag + "]" : "") + (note ? " — " + note : "") + "\n"
 }

@@ -22,8 +22,9 @@ test("escapes emphasis characters in word and note", () => {
     "- **snake\\_case \\*\\*x\\*\\*** [English] — a\\*b\\_c \\\\ d\n")
 })
 
-test("flattens newlines", () => {
-  assert.strictEqual(M.entryLine({ text: "a\nb", note: "c\r\n d", tag: "" }), "- **a b** — c d\n")
+test("flattens newlines (note lines join with / )", () => {
+  assert.strictEqual(M.entryLine({ text: "a\nb", note: "c\r\n d", tag: "" }), "- **a b** — c / d\n")
+  assert.strictEqual(M.entryLine({ text: "w", note: "line one\n\n  line_two  \n", tag: "X" }), "- **w** [X] — line one / line\\_two\n")
 })
 
 test("escape round-trips", () => {
