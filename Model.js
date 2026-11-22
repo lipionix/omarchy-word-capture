@@ -139,6 +139,20 @@ function clipboardWord(raw) {
   return ""
 }
 
+// The theme palette's yellow from colors.toml ("yellow", else "color3"); the
+// shell exposes no warning token, so the plugin reads the palette itself.
+function themeYellow(raw) {
+  var lines = String(raw || "").split("\n")
+  var fallback = ""
+  for (var i = 0; i < lines.length; i++) {
+    var match = lines[i].match(/^\s*([A-Za-z0-9_-]+)\s*=\s*["']?(#[0-9A-Fa-f]{6})/)
+    if (!match) continue
+    if (match[1] === "yellow") return match[2]
+    if (match[1] === "color3") fallback = match[2]
+  }
+  return fallback
+}
+
 // "~/Documents/word.md" -> "word.md", for the panel's meta line.
 function fileName(path) {
   var parts = String(path || "").trim().split("/")

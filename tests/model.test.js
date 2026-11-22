@@ -106,4 +106,11 @@ test("a custom class still detects", () => {
   assert.deepStrictEqual(Array.from(M.detect("été", langs)), ["French"])
 })
 
+test("theme yellow from colors.toml", () => {
+  assert.strictEqual(M.themeYellow('accent = "#ff9f0a"\nyellow = "#ffc27a"\nbright_yellow = "#ffd8a8"\n'), "#ffc27a")
+  assert.strictEqual(M.themeYellow('color3 = "#e5c07b"\n'), "#e5c07b")
+  assert.strictEqual(M.themeYellow('color3="#111111"\nyellow="#222222"'), "#222222")
+  assert.strictEqual(M.themeYellow(""), "")
+})
+
 console.log(passed + " passed")

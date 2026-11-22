@@ -34,6 +34,9 @@ Panel {
   // Normalized words already in the file, kept live by wordsFile below.
   property var captured: ({})
   readonly property bool alreadyCaptured: Model.isCaptured(captured, word)
+  property string themeYellow: ""
+  // The palette's yellow marks an already-captured word; accent if the theme has none.
+  readonly property color warning: themeYellow !== "" ? themeYellow : Commons.Color.accent
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
@@ -133,6 +136,15 @@ Panel {
     atomicWrites: true
     printErrors: false
     onLoaded: root.loadState(text())
+  }
+
+  FileView {
+    path: Commons.Color.currentThemePath + "/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.themeYellow = Model.themeYellow(text())
+    onLoadFailed: root.themeYellow = ""
   }
 
   // The words file, read and watched in-shell for the "Already captured" hint.
@@ -291,6 +303,15 @@ Panel {
             foreground: root.foreground
             onTextChanged: { root.word = text; root.error = ""; root.updateDetection() }
             onAccepted: root.submit()
+            // Same surface as every TextField; only the border turns yellow
+            // while the word is already in the file.
+            background: BorderSurface {
+              color: Style.controlFill(wordField._focused, wordField._hot, wordField.foreground, wordField.accent)
+              borderSpec: root.alreadyCaptured
+                ? Border.flat(root.warning, Math.max(1, Border.uniformWidth(wordField._borderSpec)))
+                : wordField._borderSpec
+              radius: Style.cornerRadius
+            }
           }
           // Saving stays allowed: the same word with new context is fine.
           Text {
