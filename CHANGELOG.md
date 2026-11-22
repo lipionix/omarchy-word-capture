@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0
+
+- Saving writes into the same file instead of replacing it with a new one,
+  so the file always keeps its owner, group, permissions and access list
+  (ACL). The attribute copying and checks of 1.5.2 to 1.5.4 are gone.
+- A words file the plugin creates is readable only by you (0600).
+- A save starts two small programs (`flock`, `awk`) and no temporary file.
+- Trade-off: the save is no longer an atomic swap. If the write is cut off
+  (power loss, full disk), the file can be left truncated.
+
 ## 1.5.4
 
 - Saving keeps the words file's owner and group. In a shared folder where the
