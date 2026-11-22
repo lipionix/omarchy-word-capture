@@ -135,6 +135,27 @@ Panel {
     openJob.running = true
   }
 
+  function setFilePath(path) {
+    var next = Model.safeText(path, 500).trim()
+    if (next === filePath) return
+    filePath = next
+    saveState()
+  }
+
+  // The desktop file chooser, as the built-in panels use it: close the panel
+  // first (the dialog is a normal window under the panel's layer), then
+  // report the result as a toast. Cancel does nothing.
+  function pickFile(create) {
+    if (pickJob.running) return
+    var resolved = Model.resolvePath(filePath, home)
+    var folder = resolved ? resolved.replace(/\/[^\/]*$/, "") || "/" : home
+    pickJob.command = create
+      ? ["python3", pluginDir + "/new-file.py", folder, fileName || "words.md"]
+      : ["omarchy-file-select", "--title", "Words file", "--extensions", "md markdown txt"]
+    close()
+    pickJob.running = true
+  }
+
   function updateLanguage(index, name, characters) {
     var next = languages.slice()
     next[index] = { name: Model.safeText(name, 40).trim() || "Language", characters: characters }
@@ -230,6 +251,20 @@ Panel {
     }
   }
 
+  // Exit 1 is "nothing picked"; anything else without a path is a failure.
+  Job {
+    id: pickJob
+    onDone: function(ok, output, errors) {
+      var path = output.split("\n")[0]
+      if (ok && path) {
+        root.setFilePath(path)
+        root.notify("Words file", root.fileName)
+      } else if (errors) {
+        root.notify("File chooser failed", errors)
+      }
+    }
+  }
+
   Job {
     id: openJob
     command: ["python3", root.pluginDir + "/append.py", "--touch", root.filePath]
@@ -288,32 +323,50 @@ Panel {
         anchors.fill: parent
         spacing: Style.space(12)
 
-        // Same header as the built-in panels: the bar glyph, a title, and the
-        // target file as the meta line. Esc or a click outside closes.
-        PanelHero {
+        // PanelHero's title and meta typography without its icon: the bar
+        // already shows the glyph, and PanelHero always reserves icon space.
+        Item {
           width: parent.width
-          title: "Word capture"
-          meta: root.settingsOpen ? "Settings" : (root.fileName || "No file set")
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          iconComponent: Component {
+          implicitHeight: Math.max(headerLabels.implicitHeight, settingsButton.implicitHeight)
+          Column {
+            id: headerLabels
+            anchors.left: parent.left
+            anchors.right: settingsButton.left
+            anchors.rightMargin: Style.space(12)
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(2)
             Text {
+              width: parent.width
               textFormat: Text.PlainText
-              text: button.text
+              text: "Word capture"
               color: root.foreground
               font.family: root.fontFamily
-              font.pixelSize: Style.font.display
+              font.pixelSize: Style.font.title
+              font.bold: true
+              elide: Text.ElideRight
+            }
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: (root.settingsOpen ? "Settings" : (root.fileName || "No file set")).toUpperCase()
+              color: Qt.darker(root.foreground, 1.4)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              font.letterSpacing: 1.2
+              elide: Text.ElideRight
             }
           }
-          trailingControl: Component {
-            PanelActionButton {
-              iconText: root.settingsOpen ? "󰁍" : "󰒓"
-              tooltipText: root.settingsOpen ? "Back" : "Settings"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              focusable: true
-              onClicked: root.settingsOpen = !root.settingsOpen
-            }
+          PanelActionButton {
+            id: settingsButton
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            iconText: root.settingsOpen ? "󰁍" : "󰒓"
+            tooltipText: root.settingsOpen ? "Back" : "Settings"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            focusable: true
+            onClicked: root.settingsOpen = !root.settingsOpen
           }
         }
 
@@ -463,7 +516,39 @@ Panel {
           width: parent.width
           spacing: Style.spacing.rowGap
           PanelSectionHeader { text: "MARKDOWN FILE"; foreground: root.foreground }
-          TextField { width: parent.width; text: root.filePath; foreground: root.foreground; onEditingFinished: { root.filePath = text; root.saveState() } }
+          Row {
+            width: parent.width
+            spacing: Style.spacing.controlGap
+            TextField {
+              width: parent.width - pickerActions.width - parent.spacing
+              text: root.filePath
+              foreground: root.foreground
+              onEditingFinished: root.setFilePath(text)
+            }
+            Row {
+              id: pickerActions
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.spacing.xs
+              PanelActionButton {
+                iconText: "󰝰"
+                tooltipText: "Choose a file"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                focusable: true
+                enabled: !pickJob.running
+                onClicked: root.pickFile(false)
+              }
+              PanelActionButton {
+                iconText: "󰝒"
+                tooltipText: "New file"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                focusable: true
+                enabled: !pickJob.running
+                onClicked: root.pickFile(true)
+              }
+            }
+          }
           Toggle {
             width: parent.width
             label: "Prefill from clipboard"
@@ -478,14 +563,20 @@ Panel {
             width: parent.width
             spacing: Style.spacing.controlGap
             PanelSectionHeader { text: "FILL"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
-            ButtonGroup {
-              anchors.verticalCenter: parent.verticalCenter
-              options: [{ value: "word", label: "Word" }, { value: "context", label: "Context" }]
-              value: root.prefillTarget
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              fontSize: Style.font.bodySmall
-              onChanged: function(value) { root.prefillTarget = value; root.saveState() }
+            // Plain bordered Buttons, like the plugin's others; the chosen one
+            // carries the selected fill.
+            Repeater {
+              model: [{ value: "word", label: "WORD" }, { value: "context", label: "CONTEXT" }]
+              delegate: Button {
+                anchors.verticalCenter: parent.verticalCenter
+                text: modelData.label
+                fontSize: Style.font.bodySmall
+                foreground: root.foreground
+                verticalPadding: Style.spacing.controlPaddingY
+                bordered: true
+                selected: root.prefillTarget === modelData.value
+                onClicked: { root.prefillTarget = modelData.value; root.saveState() }
+              }
             }
           }
           PanelSectionHeader { text: "LANGUAGES"; foreground: root.foreground }
