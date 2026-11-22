@@ -70,12 +70,22 @@ function characterSuggestions(text) {
   return characterPresets.filter(function(name) { return name.indexOf(query) !== -1 })
 }
 
+// Backslash-escape what would turn part of a capture into Markdown emphasis
+// (or into an escape itself): \ * _. Everything else stays readable as typed.
+function escapeMarkdown(value) {
+  return String(value || "").replace(/[\\*_]/g, "\\$&")
+}
+
+function unescapeMarkdown(value) {
+  return String(value || "").replace(/\\([\\`*_{}\[\]()#+\-.!|<>~])/g, "$1")
+}
+
 // The one place that decides how a capture looks in the Markdown file:
 // "- **text** [tag] — note". Takes named fields so the format can change
 // without touching the panel or the writer (append.py).
 function entryLine(fields) {
-  var text = safeText(fields.text, 500).trim().replace(/\r?\n/g, " ")
-  var note = safeText(fields.note, 2000).trim().replace(/\r?\n/g, " ")
+  var text = escapeMarkdown(safeText(fields.text, 500).trim().replace(/\s*\r?\n\s*/g, " "))
+  var note = escapeMarkdown(safeText(fields.note, 2000).trim().replace(/\s*\r?\n\s*/g, " "))
   var tag = safeText(fields.tag, 80).trim()
   return "- **" + text + "**" + (tag ? " [" + tag + "]" : "") + (note ? " — " + note : "") + "\n"
 }
