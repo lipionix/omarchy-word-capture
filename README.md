@@ -56,6 +56,37 @@ color, the one it uses for warnings) and a hint says so. You can still save it.
 - *Languages*: name, alphabet, and order. Use the up and down arrows to
   reorder; the first match in the list is selected by default.
 
+## Custom alphabets
+
+Each language has an alphabet. The panel uses it to guess the language of the
+word you type. A word matches a language when every letter in it is in that
+alphabet. Spaces, digits, punctuation, apostrophes, hyphens and emoji are
+ignored. If several languages match, the higher one in the list wins.
+
+Pick a preset (Latin, Cyrillic, Greek, Arabic, Hebrew or Any), or choose
+**Custom…** and type the letters yourself:
+
+- Each character stands for itself: `abc` means a, b and c.
+- `x-y` is a range: `a-z` means every letter from a to z.
+- Upper and lower case are different letters, so list both: `A-Za-z`.
+- `\` escapes a special character (`\-`, `\\`) or writes one by its code:
+  `\u00e9` or `\x41`.
+- An invalid alphabet, such as a backwards range like `z-a`, matches nothing.
+
+Examples:
+
+| Language | Alphabet |
+|---|---|
+| Spanish only | `A-Za-zÁÉÍÓÚÜÑáéíóúüñ` |
+| German only | `A-Za-zÄÖÜäöüß` |
+| Russian only | `А-яЁё` |
+| Kazakh | `А-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі` |
+
+Narrow alphabets help tell languages apart when they share a script. Put
+Spanish with the alphabet above, ordered above English with Latin. Then
+`niño` goes to Spanish, but `house` also fits Spanish's letters, so you'd
+still pick English by hand or with the hint.
+
 ## File format
 
 One line per entry, under a `## <Language>` heading. New entries go to the
