@@ -27,10 +27,10 @@ your vocabulary file and a toast confirms it:
 - **Prefill from clipboard** (Settings, off by default): opening the panel with
   an empty word field puts the clipboard's first line into it, selected, so
   typing replaces it. Images and other non-text clipboards are ignored.
-- **Language** is picked from the characters in the word: each language has a
-  character class (`latin`, `cyrillic`, `greek`, `arabic`, `hebrew`, `any`, or
-  a custom class such as `A-Za-zÀ-ÿ`). When several match, the one you last
-  picked stays.
+- **Language** is picked from the script of the word. In Settings each
+  language is one line: name, script (Latin, Cyrillic, Greek, Arabic, Hebrew,
+  Any, or Custom… with a character class such as `A-Za-zÀ-ÿ`), and a remove
+  button. When several languages match, the one you last picked stays.
 - **Errors** (no permission, path is a folder, ...) show under the Capture
   button and the panel stays open with your text.
 
@@ -38,7 +38,7 @@ your vocabulary file and a toast confirms it:
 
 - `WordCapture.qml` — bar button and panel, built from the shell's own
   `Panel`, `KeyboardPanel`, `PanelHero`, `PanelSectionHeader`, `Toggle`.
-- `Model.js` — language detection, `entryLine()` (the one place that defines
+- `Model.js` — language detection and script presets, `entryLine()` (the one place that defines
   the line format), escaping, duplicate parsing, clipboard cleanup.
 - `append.py` — appends one line (or `--touch` to only create the file):
   creates missing folders, expands `~`, resolves relative paths against
