@@ -95,12 +95,28 @@ Panel {
     language = matches[0]
   }
 
-  function moveLanguage(index, delta) {
-    var target = index + delta
-    if (target < 0 || target >= languages.length) return
-    var next = languages.slice()
-    var item = next.splice(index, 1)[0]
-    next.splice(target, 0, item)
+  // The Settings list runs on a ListModel so a drag can move rows without
+  // rebuilding them; root.languages stays the saved truth.
+  ListModel { id: languageModel }
+  onLanguagesChanged: syncLanguageModel()
+  Component.onCompleted: syncLanguageModel()
+  function syncLanguageModel() {
+    languageModel.clear()
+    for (var i = 0; i < languages.length; i++)
+      languageModel.append({ name: languages[i].name, characters: languages[i].characters })
+  }
+
+  // After a drag: save the new order if it changed. Order is priority among
+  // languages whose script matches.
+  function commitLanguageOrder() {
+    var next = []
+    var changed = false
+    for (var i = 0; i < languageModel.count; i++) {
+      var item = languageModel.get(i)
+      next.push({ name: item.name, characters: item.characters })
+      if (item.name !== languages[i].name || item.characters !== languages[i].characters) changed = true
+    }
+    if (!changed) return
     languages = Model.normalizeLanguages(next)
     saveState()
     updateDetection()
@@ -409,8 +425,9 @@ Panel {
             // while the word is already in the file.
             background: BorderSurface {
               color: Style.controlFill(wordField._focused, wordField._hot, wordField.foreground, wordField.accent)
+              // The shell's own border states, drawn in the theme's yellow.
               borderSpec: root.alreadyCaptured
-                ? Border.flat(root.warning, Math.max(1, Border.uniformWidth(wordField._borderSpec)))
+                ? Border.controlSpec(wordField._focused ? "focus" : (wordField._hot ? "hover-cursor" : "normal"), root.warning, root.warning)
                 : wordField._borderSpec
               radius: Style.cornerRadius
             }
@@ -604,7 +621,8 @@ Panel {
             width: parent.width
             // Shrink to content; only scroll once the list is genuinely tall.
             height: Math.min(contentHeight, Style.space(260))
-            model: root.languages
+            id: languageList
+            model: languageModel
             clip: true
             spacing: Style.spacing.rowGap
             // One line per language: name, script, remove. A custom character
@@ -612,8 +630,8 @@ Panel {
             delegate: Column {
               id: langRow
               property int langIndex: index
-              property string langName: modelData.name
-              property string langCharacters: modelData.characters
+              property string langName: model.name
+              property string langCharacters: model.characters
               readonly property bool storedCustom: Model.scriptLabel(langCharacters) === Model.customScript
               // Custom… picked but no class typed yet: nothing to save until there is.
               property bool customPicked: false
@@ -624,9 +642,38 @@ Panel {
               Row {
                 width: parent.width
                 spacing: Style.spacing.controlGap
+                // Drag to reorder: rows trade places live; the order is saved on release.
+                Item {
+                  id: grip
+                  width: Style.space(14)
+                  height: nameField.height
+                  Text {
+                    anchors.centerIn: parent
+                    textFormat: Text.PlainText
+                    text: "󰇝"
+                    color: gripMouse.containsMouse || gripMouse.pressed ? root.foreground : root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.icon
+                  }
+                  MouseArea {
+                    id: gripMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    preventStealing: true
+                    cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                    onPositionChanged: function(mouse) {
+                      if (!pressed) return
+                      var p = mapToItem(languageList.contentItem, mouse.x, mouse.y)
+                      var to = languageList.indexAt(Style.space(4), p.y)
+                      if (to >= 0 && to !== langRow.langIndex) languageModel.move(langRow.langIndex, to, 1)
+                    }
+                    onReleased: root.commitLanguageOrder()
+                    onCanceled: root.commitLanguageOrder()
+                  }
+                }
                 TextField {
                   id: nameField
-                  width: parent.width - scriptDropdown.width - rowActions.width - parent.spacing * 2
+                  width: parent.width - grip.width - scriptDropdown.width - removeButton.width - parent.spacing * 3
                   text: langRow.langName
                   placeholderText: "Language"
                   foreground: root.foreground
@@ -652,39 +699,17 @@ Panel {
                     root.updateLanguage(langRow.langIndex, nameField.text, Model.scriptValue(value))
                   }
                 }
-                // Order is priority among languages with the same script.
-                Row {
-                  id: rowActions
+                PanelActionButton {
+                  id: removeButton
                   anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.spacing.xs
-                  PanelActionButton {
-                    iconText: "󰅃"
-                    tooltipText: "Higher priority"
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    focusable: true
-                    enabled: langRow.langIndex > 0
-                    onClicked: root.moveLanguage(langRow.langIndex, -1)
-                  }
-                  PanelActionButton {
-                    iconText: "󰅀"
-                    tooltipText: "Lower priority"
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    focusable: true
-                    enabled: langRow.langIndex < root.languages.length - 1
-                    onClicked: root.moveLanguage(langRow.langIndex, 1)
-                  }
-                  PanelActionButton {
-                    iconText: "󰅖"
-                    tooltipText: "Remove"
-                    foreground: root.foreground
-                    hoverColor: root.urgent
-                    fontFamily: root.fontFamily
-                    focusable: true
-                    enabled: root.languages.length > 1
-                    onClicked: root.removeLanguage(langRow.langIndex)
-                  }
+                  iconText: "󰅖"
+                  tooltipText: "Remove"
+                  foreground: root.foreground
+                  hoverColor: root.urgent
+                  fontFamily: root.fontFamily
+                  focusable: true
+                  enabled: root.languages.length > 1
+                  onClicked: root.removeLanguage(langRow.langIndex)
                 }
               }
               TextField {
@@ -711,7 +736,7 @@ Panel {
             bordered: true
             onClicked: { root.languages = root.languages.concat([{ name: "New language", characters: "any" }]); root.saveState() }
           }
-          Text { width: parent.width; text: "The script of the typed word picks its language; the first match in this order wins. Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+          Text { width: parent.width; text: "The script of the typed word picks its language; the first match in this order wins (drag to reorder). Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
         }
       }
     }
