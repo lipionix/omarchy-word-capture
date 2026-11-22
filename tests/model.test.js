@@ -244,4 +244,19 @@ test("toast says Already had it only for a word captured before the save", () =>
   assert.strictEqual(M.statsLine(M.recordCapture(index, M.normalizeWord("Casa"), "Spanish", was), "Spanish"), "Already had it. 1 word, 1 in Spanish")
 })
 
+test("resolvePath matches append.sh, so the hint checks the file a capture writes", () => {
+  const { execFileSync } = require("child_process")
+  const os = require("os"), path = require("path"), fs = require("fs")
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "wc-home-"))
+  try {
+    for (const input of ["~/a/w.md", "b/w.md", "w.md", home + "/c/w.md", "  ~/d.md  "]) {
+      const out = execFileSync("sh", [path.join(__dirname, "..", "append.sh"), "--touch", input.trim()],
+        { env: { ...process.env, HOME: home } }).toString().trim()
+      assert.strictEqual(M.resolvePath(input, home), out, input)
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
 console.log(passed + " passed")

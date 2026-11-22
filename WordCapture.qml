@@ -232,8 +232,42 @@ Panel {
     printErrors: false
     onFileChanged: reload()
     onPathChanged: root.indexLoaded = false
-    onLoaded: { root.wordIndex = Model.wordIndex(text()); root.indexLoaded = true }
-    onLoadFailed: { root.wordIndex = Model.emptyIndex(); root.indexLoaded = true }
+    onLoaded: { root.wordIndex = Model.wordIndex(text()); root.indexLoaded = true; root.fileMissing = false }
+    onLoadFailed: function(error) {
+      root.wordIndex = Model.emptyIndex()
+      root.indexLoaded = true
+      root.fileMissing = root.notFound(error)
+    }
+  }
+
+  // "New file" hint. The saved path's state comes from wordsFile above; while
+  // the path field is being edited, a second FileView probes the typed path,
+  // 200 ms after the last keystroke. No processes, one probe at a time.
+  property bool fileMissing: false
+  property string probePath: ""
+  property bool probeMissing: false
+  readonly property string resolvedFilePath: Model.resolvePath(filePath, home)
+  readonly property bool probing: probePath !== "" && probePath !== resolvedFilePath
+  readonly property bool pathMissing: probing ? probeMissing : fileMissing
+  // A saved path the probe already checked keeps its answer until wordsFile reloads.
+  onFilePathChanged: {
+    if (probePath !== "" && probePath === resolvedFilePath) fileMissing = probeMissing
+    probePath = ""
+  }
+  function notFound(error) {
+    return typeof FileViewError === "undefined" || error === FileViewError.FileNotFound
+  }
+  Timer {
+    id: probeTimer
+    interval: 200
+    property string draft: ""
+    onTriggered: root.probePath = Model.resolvePath(draft, root.home)
+  }
+  FileView {
+    path: root.activated && root.probing ? root.probePath : ""
+    printErrors: false
+    onLoaded: root.probeMissing = false
+    onLoadFailed: function(error) { root.probeMissing = root.notFound(error) }
   }
 
   // A Process that reports once it has exited AND both streams have ended:
@@ -391,7 +425,7 @@ Panel {
               readonly property bool isLink: !root.settingsOpen && root.fileName !== ""
               width: parent.width
               textFormat: Text.PlainText
-              text: (root.settingsOpen ? "Settings" : (root.fileName || "No file set")).toUpperCase()
+              text: (root.settingsOpen ? "Settings" : (root.fileName ? root.fileName + (root.fileMissing ? " (new)" : "") : "No file set")).toUpperCase()
               color: Qt.darker(root.foreground, 1.4)
               font.underline: isLink && metaLink.containsMouse
               font.family: root.fontFamily
@@ -642,6 +676,7 @@ Panel {
               text: root.filePath
               foreground: root.foreground
               onEditingFinished: root.setFilePath(text)
+              onTextChanged: if (activeFocus) { probeTimer.draft = text; probeTimer.restart() }
               // After the folder chooser: select the file name (not its
               // extension) so typing renames just the file.
               onActiveFocusChanged: if (activeFocus && root.pathFocus) {
@@ -660,6 +695,17 @@ Panel {
               enabled: !pickJob.running
               onClicked: root.pickFolder()
             }
+          }
+          // Always takes its line, so the hint never moves the layout.
+          Text {
+            width: parent.width
+            textFormat: Text.PlainText
+            text: "New file, created on first capture"
+            opacity: root.pathMissing ? 1 : 0
+            color: root.dim
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
           }
           Toggle {
             width: parent.width
