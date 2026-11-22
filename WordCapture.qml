@@ -160,16 +160,13 @@ Panel {
     saveState()
   }
 
-  // The desktop file chooser, as the built-in panels use it: close the panel
-  // first (the dialog is a normal window under the panel's layer), then
-  // report the result as a toast. Cancel does nothing.
-  function pickFile(create) {
+  // The desktop folder chooser (Omarchy's own helper), as the built-in panels
+  // use it: close the panel first (the dialog is a normal window under the
+  // panel's layer), then report the result as a toast. Cancel does nothing.
+  // The file name is kept; only its folder changes.
+  function pickFolder() {
     if (pickJob.running) return
-    var resolved = Model.resolvePath(filePath, home)
-    var folder = resolved ? resolved.replace(/\/[^\/]*$/, "") || "/" : home
-    pickJob.command = create
-      ? ["python3", pluginDir + "/new-file.py", folder, fileName || "words.md"]
-      : ["omarchy-file-select", "--title", "Words file", "--extensions", "md markdown txt"]
+    pickJob.command = ["omarchy-file-select", "--title", "Folder for " + (fileName || "words.md"), "--directory"]
     close()
     pickJob.running = true
   }
@@ -275,10 +272,11 @@ Panel {
   Job {
     id: pickJob
     onDone: function(ok, output, errors) {
-      var path = output.split("\n")[0]
-      if (ok && path) {
-        root.setFilePath(path)
-        root.notify("Words file", root.fileName)
+      var picked = output.split("\n")[0]
+      var folder = picked.replace(/\/+$/, "")  // "/" becomes "", then "/name"
+      if (ok && picked) {
+        root.setFilePath(folder + "/" + (root.fileName || "words.md"))
+        root.notify("Words file", root.filePath)
       } else if (errors) {
         root.notify("File chooser failed", errors)
       }
@@ -541,33 +539,21 @@ Panel {
             width: parent.width
             spacing: Style.spacing.controlGap
             TextField {
-              width: parent.width - pickerActions.width - parent.spacing
+              width: parent.width - folderButton.width - parent.spacing
               text: root.filePath
               foreground: root.foreground
               onEditingFinished: root.setFilePath(text)
             }
-            Row {
-              id: pickerActions
+            PanelActionButton {
+              id: folderButton
               anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.spacing.xs
-              PanelActionButton {
-                iconText: "󰝰"
-                tooltipText: "Choose a file"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                focusable: true
-                enabled: !pickJob.running
-                onClicked: root.pickFile(false)
-              }
-              PanelActionButton {
-                iconText: "󰝒"
-                tooltipText: "New file"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                focusable: true
-                enabled: !pickJob.running
-                onClicked: root.pickFile(true)
-              }
+              iconText: "󰉖"
+              tooltipText: "Choose folder"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              focusable: true
+              enabled: !pickJob.running
+              onClicked: root.pickFolder()
             }
           }
           Toggle {
