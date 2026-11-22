@@ -186,6 +186,32 @@ test("counts come from the [tag], else the ## section", () => {
   assert.strictEqual(statsAfter(file, "b", "C++ (old) [x]"), "7 words, 2 in C++ (old) [x]")
 })
 
+test("sections and tags match like append.sh: A-Z case and spaces ignored", () => {
+  const file = "## spanish  \n- **casa**\n- **gato** [SPANISH]\n\n##   Old   English\n- **wyrd**\n\n## Испанский\n- **дом**\n\n## \n- **loose**\n"
+  assert.strictEqual(statsAfter(file, "perro", "Spanish"), "6 words, 3 in Spanish")
+  assert.strictEqual(statsAfter(file, "cyning", "Old English"), "6 words, 2 in Old English")
+  assert.strictEqual(statsAfter(file, "дача", "испанский"), "6 words, 1 in испанский")  // only A-Z case folds
+  assert.strictEqual(statsAfter(file, "b", ""), "6 words")                           // "##" alone: no section
+})
+
+test("CRLF files are read like LF files", () => {
+  const file = "## Spanish\r\n\r\n- **casa** [Spanish]\r\n- **perro**\r\n"
+  assert.ok(M.isCaptured(M.wordIndex(file), "perro"))
+  assert.strictEqual(statsAfter(file, "gato", "Spanish"), "3 words, 3 in Spanish")
+})
+
+test("append.sh and the counts agree on sections", () => {
+  withScratch((home) => {
+    const file = path.join(home, "w.md")
+    fs.writeFileSync(file, "## spanish \r\n- **casa**\r\n")
+    append(home, "~/w.md", M.entryLine({ text: "perro", note: "", tag: "Spanish" }).trim(), "Spanish")
+    const text = fs.readFileSync(file, "utf8")
+    assert.strictEqual((text.match(/^## /gm) || []).length, 1)               // no second Spanish heading
+    assert.ok(!/[^\r]\n/.test(text))                                         // still CRLF only
+    assert.strictEqual(M.statsLine(M.addWord(M.wordIndex(text), "gato", "Spanish"), "Spanish"), "3 words, 3 in Spanish")
+  })
+})
+
 test("toast lines", () => {
   assert.strictEqual(statsAfter("", "casa", "Spanish"), "1 word, 1 in Spanish")
   assert.strictEqual(statsAfter("- **a**\n", "b", ""), "2 words")

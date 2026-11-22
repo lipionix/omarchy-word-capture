@@ -53,39 +53,51 @@ if [ "$mode" = touch ]; then printf '%s\n' "$path"; exit 0; fi
   flock 9 || exit 1
   tmp=$(mktemp -- "$dir/.word-capture.XXXXXX") || exit 1
   trap 'rm -f -- "$tmp"' EXIT
-  WC_LINE=$line WC_SECTION=$section awk '
+  # The C locale makes tolower() fold A-Z only, the same in every awk.
+  LC_ALL=C WC_LINE=$line WC_SECTION=$section awk '
     function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
     # One line: newlines become spaces, outer whitespace goes.
     function oneLine(s) { gsub(/\n/, " ", s); sub(/^[ \t\r\v\f]+/, "", s); sub(/[ \t\r\v\f]+$/, "", s); return s }
-    # "## Name" -> "Name"; other headings of level 1-2 -> a non-matching marker.
+    # "## Name" -> "Name"; other headings of level 1-2, and "##" without a
+    # name, -> a non-matching marker (they end a section).
     function heading(s,   t) {
-      if (s ~ /^##[ \t]/) return trim(substr(s, 3))
+      sub(/\r$/, "", s)
+      if (s ~ /^##[ \t]/) { t = trim(substr(s, 3)); return t == "" ? "\001" : t }
       if (s ~ /^#[ \t]/ || s == "#" || s == "##") return "\001"
       return ""
     }
+    # How section names compare: case of A-Z and runs of spaces ignored.
+    # Model.js (sectionKey) compares the same way for the toast counts.
+    function key(s) { s = trim(s); gsub(/[ \t]+/, " ", s); return tolower(s) }
+    # New lines take the line ending of the first line of the file, so a
+    # CRLF file stays CRLF. Existing lines are written back as they were.
+    function put(s) { printf "%s%s\n", s, crlf ? "\r" : "" }
+    function keep(i) { if (i == n && crlf && lines[i] !~ /\r$/) put(lines[i]); else print lines[i] }
     { lines[++n] = $0 }
     END {
+      crlf = n > 0 && lines[1] ~ /\r$/
       want = oneLine(ENVIRON["WC_SECTION"]); entry = ENVIRON["WC_LINE"]
       # Leading whitespace of an entry is kept, as before; only the end trims.
       gsub(/\n/, " ", entry); sub(/[ \t\r\v\f]+$/, "", entry)
-      if (want == "") { for (i = 1; i <= n; i++) print lines[i]; print entry; exit }
-      start = 0; stop = n
+      if (want == "") { for (i = 1; i <= n; i++) keep(i); put(entry); exit }
+      # An existing heading is reused as written: "## spanish " takes Spanish.
+      wanted = key(want); start = 0; stop = n
       for (i = 1; i <= n; i++) {
         h = heading(lines[i])
-        if (start == 0) { if (h == want) start = i }
+        if (start == 0) { if (h != "" && key(h) == wanted) start = i }
         else if (h != "") { stop = i - 1; break }
       }
       if (start == 0) {
-        for (i = 1; i <= n; i++) print lines[i]
-        if (n > 0 && trim(lines[n]) != "") print ""
-        print "## " want; print ""; print entry; exit
+        for (i = 1; i <= n; i++) keep(i)
+        if (n > 0 && trim(lines[n]) != "") put("")
+        put("## " want); put(""); put(entry); exit
       }
       # After the last non-blank line of the section, so blank lines before the
       # next heading stay where they are.
       at = start
       for (i = start + 1; i <= stop; i++) if (trim(lines[i]) != "") at = i
-      if (at == start) { for (i = 1; i <= start; i++) print lines[i]; print ""; print entry; for (i = start + 1; i <= n; i++) print lines[i]; exit }
-      for (i = 1; i <= n; i++) { print lines[i]; if (i == at) print entry }
+      if (at == start) { for (i = 1; i <= start; i++) keep(i); put(""); put(entry); for (i = start + 1; i <= n; i++) keep(i); exit }
+      for (i = 1; i <= n; i++) { keep(i); if (i == at) put(entry) }
     }
   ' "$path" >"$tmp" || exit 1
   # The temp file starts private (0600). cp copies mode and ACL in one go;

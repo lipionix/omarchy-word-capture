@@ -249,24 +249,34 @@ function wordIndex(text) {
   return index
 }
 
-// "## Spanish" -> "Spanish"; "# Title" -> "" (outside any section);
-// anything else (including "### sub") -> null, not a section boundary.
+// "## Spanish" -> "Spanish"; "# Title" and "##" without a name -> ""
+// (outside any section); anything else (including "### sub") -> null, not a
+// section boundary.
 function headingOf(line) {
   var m = /^(#{1,2})(?:[ \t]+(.*?))?[ \t]*\r?$/.exec(line)
   if (!m) return null
   return m[1] === "##" ? (m[2] || "") : ""
 }
 
+// How section and tag names compare: case of A-Z and runs of spaces ignored,
+// exactly as append.sh matches "## " headings, so "## spanish" and [Spanish]
+// count as one language.
+function sectionKey(name) {
+  return String(name || "").replace(/^[ \t\r]+|[ \t\r]+$/g, "").replace(/[ \t]+/g, " ")
+    .replace(/[A-Z]/g, function(c) { return c.toLowerCase() })
+}
+
 // Record one word; returns { duplicate, total, inTag } after the change.
 function addWord(index, key, tag) {
   var name = String(tag || "").trim()
+  var group = sectionKey(name)
   var duplicate = key === "" || Object.prototype.hasOwnProperty.call(index.words, key)
   if (!duplicate) {
     index.words[key] = name
     index.total++
-    if (name) index.byTag[name] = (index.byTag[name] || 0) + 1
+    if (group) index.byTag[group] = (index.byTag[group] || 0) + 1
   }
-  return { duplicate: duplicate, total: index.total, inTag: name ? (index.byTag[name] || 0) : 0 }
+  return { duplicate: duplicate, total: index.total, inTag: group ? (index.byTag[group] || 0) : 0 }
 }
 
 function isCaptured(index, word) {
@@ -322,7 +332,6 @@ function clipboardText(raw, target) {
   return safeText(text.replace(/\r\n?/g, "\n"), 2000).trim()
 }
 
-// "~/Documents/word.md" -> "word.md", for the panel's meta line.
 // [start, end) of the file name in a path, without its extension, for
 // selecting it ("~/notes/words.md" -> the "words"). Dotfiles keep their dot.
 function nameRange(path) {
@@ -333,6 +342,7 @@ function nameRange(path) {
   return [start, end]
 }
 
+// "~/Documents/word.md" -> "word.md", for the panel's meta line.
 function fileName(path) {
   var parts = String(path || "").trim().split("/")
   return parts[parts.length - 1] || ""

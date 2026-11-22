@@ -116,6 +116,62 @@ t_heading_names_are_literal() {
 "
 }
 
+# A heading matches whatever the case of A-Z and the spaces, and is kept as
+# written: "## spanish  " takes Spanish entries.
+t_existing_heading_matches_case_and_spacing() {
+  printf '## spanish  \n\n- **casa** [Spanish]\n\n##   Old   English\n- **wyrd**\n' >"$D/w.md"
+  save "$D/w.md" "- **perro** [Spanish]" Spanish
+  save "$D/w.md" "- **cyning** [Old English]" "OLD ENGLISH"
+  same "$D/w.md" "## spanish  
+
+- **casa** [Spanish]
+- **perro** [Spanish]
+
+##   Old   English
+- **wyrd**
+- **cyning** [Old English]
+"
+}
+
+# Other alphabets must match exactly: only A-Z case is ignored.
+t_non_latin_heading_case_must_match() {
+  printf '## Испанский\n- **a**\n' >"$D/w.md"
+  save "$D/w.md" "- **b**" "испанский"
+  same "$D/w.md" "## Испанский
+- **a**
+
+## испанский
+
+- **b**
+"
+}
+
+# "##" without a name ends the section above it, like any heading.
+t_heading_without_a_name_ends_a_section() {
+  printf '## A\n- **a** [A]\n## \n- **loose**\n' >"$D/w.md"
+  save "$D/w.md" "- **b** [A]" A
+  same "$D/w.md" "## A
+- **a** [A]
+- **b** [A]
+## 
+- **loose**
+"
+}
+
+# A CRLF file gets CRLF on every new line, also on a last line that had no
+# line break; nothing is mixed.
+t_crlf_files_stay_crlf() {
+  printf '## A\r\n\r\n- **a** [A]\r\n\r\n## B\r\n- **b** [B]' >"$D/w.md"
+  save "$D/w.md" "- **a2** [A]" A
+  save "$D/w.md" "- **c** [C]" C
+  printf '## A\r\n\r\n- **a** [A]\r\n- **a2** [A]\r\n\r\n## B\r\n- **b** [B]\r\n\r\n## C\r\n\r\n- **c** [C]\r\n' >"$D/expected"
+  ok "CRLF throughout" cmp -s "$D/expected" "$D/w.md"
+  printf 'x\r\n' >"$D/plain.md"
+  save "$D/plain.md" "- **y**"
+  printf 'x\r\n- **y**\r\n' >"$D/expected"
+  ok "CRLF without a section" cmp -s "$D/expected" "$D/plain.md"
+}
+
 t_empty_section_gets_a_blank_line_first() {
   printf '## Greek\n## Next\n' >"$D/w.md"
   save "$D/w.md" "- **λόγος** [Greek]" Greek
@@ -253,7 +309,9 @@ t_unwritable_targets_are_reported() {
 tests="t_new_file_gets_a_section t_entry_goes_to_the_end_of_its_section
 t_captures_keep_their_order t_new_sections_follow_first_capture_order
 t_last_section_without_trailing_newline t_other_text_is_left_alone
-t_heading_names_are_literal t_empty_section_gets_a_blank_line_first
+t_heading_names_are_literal t_existing_heading_matches_case_and_spacing
+t_non_latin_heading_case_must_match t_heading_without_a_name_ends_a_section
+t_crlf_files_stay_crlf t_empty_section_gets_a_blank_line_first
 t_no_section_appends_literal_text t_multi_line_input_becomes_one_line
 t_missing_folders_are_created t_touch_creates_an_empty_file_only
 t_prints_the_resolved_path t_symlink_is_followed t_permissions_are_kept

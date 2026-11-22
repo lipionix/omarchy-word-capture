@@ -90,8 +90,11 @@ still pick English by hand or with the hint.
 ## File format
 
 One line per entry, under a `## <Language>` heading. New entries go to the
-end of their section; a missing section is added at the end of the file. Any
-other text in the file is left as it is.
+end of their section; a missing section is added at the end of the file. An
+existing heading is found whatever the case of A to Z and the spacing
+(`## spanish ` takes Spanish entries) and is kept as you wrote it; names in
+other alphabets must match exactly. Any other text in the file is left as it
+is, and a file with Windows (CRLF) line endings keeps them on new lines too.
 
 ```markdown
 ## Spanish
