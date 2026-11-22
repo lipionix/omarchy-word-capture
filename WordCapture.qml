@@ -457,7 +457,7 @@ Panel {
             font.pixelSize: Style.font.caption
           }
 
-          PanelSectionHeader { text: "CONTEXT / EXAMPLE"; foreground: root.foreground }
+          PanelSectionHeader { text: "CONTEXT / NOTE"; foreground: root.foreground }
           // Multi-line context, styled like the shell's TextField: grows to five
           // lines, then scrolls. Enter captures, Shift+Enter adds a line.
           Flickable {
@@ -472,7 +472,7 @@ Panel {
               id: contextField
               readonly property var _borderSpec: Border.controlSpec(activeFocus ? "focus" : (hovered ? "hover-cursor" : "normal"), root.foreground, Commons.Color.accent)
               text: root.context
-              placeholderText: "Meaning or an example · Shift+Enter for a new line"
+              placeholderText: "Context, example or note (Shift+Enter for a new line)"
               wrapMode: TextEdit.Wrap
               hoverEnabled: true
               font.family: Style.font.family
