@@ -9,7 +9,8 @@ your vocabulary file and a toast confirms it:
 ```
 
 `\`, `*` and `_` in the word and the context are backslash-escaped, so
-`snake_case` or `**x**` cannot break the bold word.
+`snake_case` or `**x**` cannot break the bold word. A multi-line context
+stays one list line, its lines joined with ` / `.
 
 ## Use
 
@@ -18,19 +19,25 @@ your vocabulary file and a toast confirms it:
 | Click bar icon      | Open or close the panel (word field focused)           |
 | Right-click icon    | Open the words file in the Omarchy default editor (`omarchy-launch-editor`); a missing file is created empty |
 | Enter               | Capture (from the word or context field), close, toast |
+| Shift+Enter         | New line in the context field (grows to 5 lines, then scrolls) |
 | Esc / click outside | Close; the draft is kept for next time                 |
 | Settings (gear)     | Words file, clipboard prefill, languages               |
 
-- **Already captured**: while you type, a dim hint shows when the word is
+- **Already captured**: while you type, the word field's border turns the
+  theme's yellow (`colors.toml` `yellow`) and a dim hint shows when the word is
   already in the file (case-insensitive, compared on the `**word**` part).
   Saving is still allowed. The file is watched, so edits made elsewhere count.
-- **Prefill from clipboard** (Settings, off by default): opening the panel with
-  an empty word field puts the clipboard's first line into it, selected, so
-  typing replaces it. Images and other non-text clipboards are ignored.
+- **Prefill from clipboard** (Settings, off by default): choose the field it
+  fills, Word (default) or Context. Opening the panel with that field empty
+  fills it: Word gets the clipboard's first line, selected so typing replaces
+  it; Context gets the text with its lines (up to 2000 characters). Images and
+  other non-text clipboards are ignored.
 - **Language** is picked from the script of the word. In Settings each
   language is one line: name, script (Latin, Cyrillic, Greek, Arabic, Hebrew,
   Any, or Custom… with a character class such as `A-Za-zÀ-ÿ`), and a remove
-  button. When several languages match, the one you last picked stays.
+  button, plus up/down buttons to reorder. Order is priority: when several
+  languages match the word's script, the first one in the list is selected.
+  Picking one by hand sticks for the current word.
 - **Errors** (no permission, path is a folder, ...) show under the Capture
   button and the panel stays open with your text.
 
@@ -45,7 +52,8 @@ your vocabulary file and a toast confirms it:
   `$HOME`, adds a newline if the file lacks one, locks the file while writing.
 - `tests/model.test.js` — logic tests: `node tests/model.test.js`.
 - State: `~/.local/state/omarchy/word-capture.json` (`filePath`, `languages`,
-  `language`, `prefillClipboard`).
+  `language`, `prefillClipboard`, `prefillTarget`). Missing keys take their
+  defaults, so older state files keep working.
 
 ## Install
 
