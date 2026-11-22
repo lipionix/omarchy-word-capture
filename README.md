@@ -33,20 +33,22 @@ stays one list line, its lines joined with ` / `.
 |---------------------|--------------------------------------------------------|
 | Click bar icon      | Open or close the panel (word field focused)           |
 | Right-click icon    | Open the words file in the Omarchy default editor (`omarchy-launch-editor`); a missing file is created empty |
+| File name in header | Same as right-click: opens the words file              |
 | Enter               | Capture (from the word or context field), close, toast |
 | Shift+Enter         | New line in the context field (grows to 5 lines, then scrolls) |
 | Esc / click outside | Close; the draft is kept for next time                 |
 | Settings (gear)     | Words file (edit the path; the folder icon picks its folder and keeps the file name; the panel comes back with the name selected), clipboard prefill, languages |
 
 - **Already captured**: while you type, the word field's border takes the
-  theme's yellow (`colors.toml` `yellow`, in the shell's normal border style)
+  theme's yellow (`colors.toml` `yellow`, at the field's normal border width)
   and a dim hint shows when the word is already in the file. Saving is still
   allowed. See *How matching works* below.
 - **Prefill from clipboard** (Settings, off by default): choose the field it
   fills, Word (default) or Context. Opening the panel with that field empty
-  fills it: Word gets the clipboard's first line, selected so typing replaces
-  it; Context gets the text with its lines (up to 2000 characters). Images and
-  other non-text clipboards are ignored.
+  fills it; text kept in the other field does not stop it. Word gets the
+  clipboard's first line and the focus moves to Context; Context gets the text
+  with its lines (up to 2000 characters) and the focus stays on Word. Images
+  and other non-text clipboards are ignored.
 - **Language** is picked from the script of the word. In Settings each
   language is one line: name, script (Latin, Cyrillic, Greek, Arabic, Hebrew,
   Any, or Custom… with a character class such as `A-Za-zÀ-ÿ`), and a remove
