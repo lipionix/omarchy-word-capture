@@ -119,4 +119,4 @@ The second line removes the settings. Your words file is never touched.
 
 ## License
 
-To be added.
+MIT, see [LICENSE](LICENSE).
