@@ -131,9 +131,9 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    slotSize: Style.bar.statusSlot
-    text: "󰂺"
-    fontFamily: "Symbols Nerd Font"
+    // Nerd Font md-book_plus in the bar's own font and slot, like the built-in
+    // widgets: "add to the book".
+    text: "󰗛"
     tooltipText: "Word capture"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton || buttonCode === Qt.MiddleButton) return
@@ -185,7 +185,6 @@ Panel {
             text: root.settingsOpen ? "BACK" : "SETTINGS"
             fontSize: Style.font.bodySmall
             foreground: root.foreground
-            fontFamily: Style.font.family
             verticalPadding: Style.spacing.controlPaddingY
             bordered: true
             anchors.verticalCenter: parent.verticalCenter
@@ -196,7 +195,6 @@ Panel {
             text: "CLOSE"
             fontSize: Style.font.bodySmall
             foreground: root.foreground
-            fontFamily: Style.font.family
             verticalPadding: Style.spacing.controlPaddingY
             bordered: true
             anchors.verticalCenter: parent.verticalCenter
@@ -209,7 +207,7 @@ Panel {
           width: parent.width
           spacing: Style.space(8)
 
-          Text { text: "WORD / PHRASE"; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+          PanelSectionHeader { text: "WORD / PHRASE"; foreground: root.foreground }
           TextField {
             id: wordField
             width: parent.width
@@ -221,7 +219,7 @@ Panel {
             onAccepted: root.submit()
           }
 
-          Text { text: "CONTEXT / EXAMPLE"; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+          PanelSectionHeader { text: "CONTEXT / EXAMPLE"; foreground: root.foreground }
           TextField {
             id: contextField
             width: parent.width
@@ -235,7 +233,7 @@ Panel {
           Row {
             width: parent.width
             spacing: Style.space(8)
-            Text { width: parent.width - Style.space(200); text: "LANGUAGE"; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
+            PanelSectionHeader { width: parent.width - Style.space(200); text: "LANGUAGE"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
             Text {
               width: Style.space(192)
               text: root.matches.length ? root.matches.join(", ") : "No match"
@@ -266,7 +264,6 @@ Panel {
           Button {
             width: parent.width
             text: root.writing ? "SAVING" : "CAPTURE  /  ENTER"
-            fontFamily: Style.font.family
             foreground: root.foreground
             fontSize: Style.font.body
             horizontalPadding: Style.spacing.controlPaddingX
@@ -292,9 +289,9 @@ Panel {
           visible: root.settingsOpen
           width: parent.width
           spacing: Style.space(10)
-          Text { text: "MARKDOWN FILE"; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+          PanelSectionHeader { text: "MARKDOWN FILE"; foreground: root.foreground }
           TextField { width: parent.width; text: root.filePath; foreground: root.foreground; onEditingFinished: { root.filePath = text; root.saveState() } }
-          Text { text: "DISTINGUISHABLE CHARACTERS"; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+          PanelSectionHeader { text: "DISTINGUISHABLE CHARACTERS"; foreground: root.foreground }
           ListView {
             width: parent.width
             // Shrink to content; only scroll once the list is genuinely tall.
@@ -337,7 +334,6 @@ Panel {
                   text: "REMOVE"
                   fontSize: Style.font.bodySmall
                   foreground: root.foreground
-                  fontFamily: Style.font.family
                   verticalPadding: Style.spacing.controlPaddingY
                   bordered: true
                   onClicked: root.removeLanguage(langRow.langIndex)
@@ -353,7 +349,6 @@ Panel {
                     text: modelData
                     fontSize: Style.font.bodySmall
                     foreground: root.foreground
-                    fontFamily: Style.font.family
                     verticalPadding: Style.spacing.controlPaddingY
                     bordered: true
                     onClicked: {
@@ -370,7 +365,6 @@ Panel {
             text: "ADD LANGUAGE"
             fontSize: Style.font.bodySmall
             foreground: root.foreground
-            fontFamily: Style.font.family
             verticalPadding: Style.spacing.controlPaddingY
             bordered: true
             onClicked: { root.languages = root.languages.concat([{ name: "New language", characters: "any" }]); root.saveState() }
