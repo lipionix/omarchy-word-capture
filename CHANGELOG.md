@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.4
+
+- Saving keeps the words file's owner and group. In a shared folder where the
+  replacement file could not get them, the entry is written into the existing
+  file instead, so a save never gives another group access to the notes.
+
 ## 1.5.3
 
 - An existing `## Language` heading is found whatever the case of A to Z and
