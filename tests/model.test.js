@@ -1,217 +1,228 @@
-// Logic tests for Model.js: node tests/model.test.js
-// Model.js is a QML JavaScript resource (no exports), so load it into a context.
+// Tests for Model.js, the panel's logic: node tests/model.test.js
+// Model.js is a QML JavaScript resource (no exports), so it is loaded into a
+// context. The last line is a summary that tests/run.sh reads.
 const fs = require("fs")
+const os = require("os")
 const vm = require("vm")
 const path = require("path")
-const assert = require("assert")
+const nodeAssert = require("assert")
+const { execFileSync } = require("child_process")
 
+const root = path.join(__dirname, "..")
 const M = {}
 vm.createContext(M)
-vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "Model.js"), "utf8"), M)
+vm.runInContext(fs.readFileSync(path.join(root, "Model.js"), "utf8"), M)
 
-let passed = 0
-function test(name, fn) { fn(); passed++ }
+// Every check goes through `assert`, which counts it; a test that makes no
+// check fails, so a test cannot pass by doing nothing.
+let checks = 0
+const assert = {}
+for (const key of ["ok", "strictEqual", "deepStrictEqual", "notStrictEqual"])
+  assert[key] = (...args) => { checks++; return nodeAssert[key](...args) }
 
-test("entry line keeps the format", () => {
+let passed = 0, failed = 0
+function test(name, fn) {
+  checks = 0
+  try {
+    fn()
+    if (!checks) throw new Error("made no checks")
+    passed++
+  } catch (e) {
+    failed++
+    console.log("FAIL: " + name + "\n" + String(e.message || e).replace(/^/gm, "    "))
+  }
+}
+
+const list = (value) => Array.from(value)
+const detect = (word, languages) => list(M.detect(word, languages || M.defaults()))
+// The toast line after capturing `word` in `tag` into a file with this text.
+const statsAfter = (file, word, tag) =>
+  M.statsLine(M.recordCapture(M.wordIndex(file), M.normalizeWord(word), tag, M.isCaptured(M.wordIndex(file), word)), tag)
+
+// Run append.sh in a scratch HOME; returns its stdout. Removed afterwards.
+function withScratch(fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wc-test-"))
+  try { return fn(dir) } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+}
+const append = (home, ...args) =>
+  execFileSync("sh", [path.join(root, "append.sh"), ...args], { env: { ...process.env, HOME: home } }).toString().trim()
+
+// ---- The entry line -----------------------------------------------------------
+
+test("entry line format", () => {
   assert.strictEqual(M.entryLine({ text: " casa ", note: "la casa", tag: "Spanish" }), "- **casa** [Spanish] — la casa\n")
   assert.strictEqual(M.entryLine({ text: "w", note: "", tag: "" }), "- **w**\n")
 })
 
-test("escapes emphasis characters in word and note", () => {
+test("* _ and \\ are escaped in the word and the note", () => {
   assert.strictEqual(M.entryLine({ text: "snake_case **x**", note: "a*b_c \\ d", tag: "English" }),
     "- **snake\\_case \\*\\*x\\*\\*** [English] — a\\*b\\_c \\\\ d\n")
 })
 
-test("flattens newlines (note lines join with / )", () => {
+test("note lines are joined with ' / ', word lines with a space", () => {
   assert.strictEqual(M.entryLine({ text: "a\nb", note: "c\r\n d", tag: "" }), "- **a b** — c / d\n")
   assert.strictEqual(M.entryLine({ text: "w", note: "line one\n\n  line_two  \n", tag: "X" }), "- **w** [X] — line one / line\\_two\n")
 })
 
-test("escape round-trips", () => {
-  for (const s of ["snake_case", "**x**", "a\\b", "plain", "a\\*b"])
-    assert.strictEqual(M.unescapeMarkdown(M.escapeMarkdown(s)), s)
+// ---- Language detection ---------------------------------------------------------
+
+test("the alphabet picks the language", () => {
+  assert.deepStrictEqual(detect("привет"), ["Russian"])
+  assert.deepStrictEqual(detect("hola"), ["English", "Spanish"])
 })
 
-test("detects by script", () => {
-  assert.deepStrictEqual(Array.from(M.detect("привет", M.defaults())), ["Russian"])
-  assert.deepStrictEqual(Array.from(M.detect("hola", M.defaults())), ["English", "Spanish"])
+test("only letters count", () => {
+  assert.deepStrictEqual(detect("don't"), ["English", "Spanish"])
+  assert.deepStrictEqual(detect("don’t"), ["English", "Spanish"])
+  assert.deepStrictEqual(detect("rock-n-roll"), ["English", "Spanish"])
+  assert.deepStrictEqual(detect("Ñandú, ¿qué?"), ["English", "Spanish"])
+  assert.deepStrictEqual(detect("cafe\u0301"), ["English", "Spanish"])      // decomposed é
+  assert.deepStrictEqual(detect("ёлка"), ["Russian"])
+  assert.deepStrictEqual(detect("Привет 👋🏽!"), ["Russian"])
+  assert.deepStrictEqual(detect("2 кота"), ["Russian"])
+  assert.deepStrictEqual(detect("Tiếng Việt"), ["English", "Spanish"])
+  assert.deepStrictEqual(detect("123 !!"), [])                              // no letters
+  assert.deepStrictEqual(detect("😀"), [])
+  assert.deepStrictEqual(detect(""), [])
+  assert.deepStrictEqual(detect("dom дом"), [])                             // two alphabets
 })
 
-test("file name for the meta line", () => {
-  assert.strictEqual(M.fileName("/home/a/Documents/word.md"), "word.md")
-  assert.strictEqual(M.fileName("~/notes.md"), "notes.md")
-  assert.strictEqual(M.fileName(""), "")
+test("list order is priority", () => {
+  const spanishFirst = [{ name: "Spanish", characters: "latin" }, { name: "English", characters: "latin" }, { name: "Russian", characters: "cyrillic" }]
+  assert.deepStrictEqual(detect("casa", spanishFirst), ["Spanish", "English"])
+  const anyFirst = [{ name: "Notes", characters: "any" }, { name: "Russian", characters: "cyrillic" }]
+  assert.deepStrictEqual(detect("дом", anyFirst), ["Notes", "Russian"])
+  assert.deepStrictEqual(detect("casa", anyFirst), ["Notes"])
 })
 
-test("parses captured words from the file", () => {
-  const file = [
+test("custom alphabets", () => {
+  const has = (word, chars) => M.matchesCharacters(word, chars)
+  assert.ok(has("Été", "A-Za-zÀ-ÿ") && !has("дом", "A-Za-zÀ-ÿ"))
+  assert.ok(has("гре", "а-яё") && has("ёж", "а-яё"))
+  assert.ok(has("éA", "\\u00e9\\x41") && has("é", "\\u{e9}"))               // escapes spell a character
+  assert.ok(has("x", "^x") && !has("y", "^x"))                              // ^ is not negation
+  assert.ok(has("ab", "\\]ab\\\\\\-") && has("a", "a-"))                    // escaped ] \ - and a trailing -
+  assert.ok(has("ab]", "ab"))                                               // punctuation in the word is skipped
+  assert.ok(has("gre", "gre") && !has("greek", "gre"))                      // a set, not a preset name
+  assert.ok(has("anything", "any"))
+  // A broken set matches nothing instead of failing.
+  for (const broken of ["z-a", "\\u12", "\\u{zz}", ""]) assert.ok(!has("a", broken), broken)
+})
+
+test("the language list from settings is cleaned up", () => {
+  const names = (value) => list(M.normalizeLanguages(value)).map((l) => l.name + ":" + l.characters)
+  const defaults = names(M.defaults())
+  assert.deepStrictEqual(names(undefined), defaults)
+  assert.deepStrictEqual(names([]), defaults)
+  assert.deepStrictEqual(names("English"), defaults)
+  assert.deepStrictEqual(names([{ name: "  ", characters: "latin" }, null, { name: " French " }]), ["French:any"])
+  assert.deepStrictEqual(names([{ name: "Old", charset: "greek" }]), ["Old:greek"])  // older settings key
+  assert.strictEqual(M.normalizeLanguages([{ name: "x".repeat(80) }])[0].name.length, 40)
+  assert.strictEqual(M.normalizeLanguages(Array.from({ length: 30 }, (_, i) => ({ name: "L" + i }))).length, 20)
+})
+
+test("alphabet dropdown items", () => {
+  assert.deepStrictEqual(list(M.scriptLabels()), ["Latin", "Cyrillic", "Greek", "Arabic", "Hebrew", "Any", "Custom…"])
+  for (const label of list(M.scriptLabels()).slice(0, -1))
+    assert.strictEqual(M.scriptLabel(M.scriptValue(label)), label)
+  assert.strictEqual(M.scriptLabel("Latin"), "Latin")
+  assert.strictEqual(M.scriptLabel("A-Za-zÀ-ÿ"), "Custom…")
+  assert.strictEqual(M.scriptLabel(""), "Custom…")
+  assert.strictEqual(M.scriptValue("Custom…"), "")
+})
+
+// ---- Already captured -------------------------------------------------------------
+
+test("captured words are found in the file, prose is not", () => {
+  const index = M.wordIndex([
     "# Vocabulary",
     "- **Casa** [Spanish] — la casa",
     "- **snake\\_case** [English]",
     "- **\\*\\*x\\*\\*** [English] — escaped stars",
     "  * **Привет**  [Russian]",
-    "Some prose with **bold** text",
+    "+ **plus**",
     "- **two  words**",
+    "Some prose with **bold** text",
+    "| **cell** | table |",
     "",
-  ].join("\n")
-  const set = M.wordIndex(file)
-  assert.ok(M.isCaptured(set, "casa"))
-  assert.ok(M.isCaptured(set, "  CASA "))
-  assert.ok(M.isCaptured(set, "snake_case"))
-  assert.ok(M.isCaptured(set, "**x**"))
-  assert.ok(M.isCaptured(set, "привет"))
-  assert.ok(M.isCaptured(set, "two words"))
-  assert.ok(!M.isCaptured(set, "bold"))
-  assert.ok(!M.isCaptured(set, "vocabulary"))
-  assert.ok(!M.isCaptured(set, ""))
-})
-
-test("a written line is found again", () => {
-  for (const w of ["snake_case", "a*b", "back\\slash", "Ñandú", "two words"]) {
-    const set = M.wordIndex(M.entryLine({ text: w, note: "n_o*te", tag: "X" }))
-    assert.ok(M.isCaptured(set, w), w)
-  }
-})
-
-test("resolves paths like append.py", () => {
-  assert.strictEqual(M.resolvePath("~/Documents/word.md", "/home/a"), "/home/a/Documents/word.md")
-  assert.strictEqual(M.resolvePath("notes/w.md", "/home/a"), "/home/a/notes/w.md")
-  assert.strictEqual(M.resolvePath("/tmp/w.md", "/home/a"), "/tmp/w.md")
-  assert.strictEqual(M.resolvePath(" ", "/home/a"), "")
-})
-
-test("clipboard prefill text", () => {
-  assert.strictEqual(M.clipboardWord("  casa \n"), "casa")
-  assert.strictEqual(M.clipboardWord("\n\n first  line \nsecond"), "first line")
-  assert.strictEqual(M.clipboardWord("a\u0000b"), "")
-  assert.strictEqual(M.clipboardWord("\ufffdPNG"), "")
-  assert.strictEqual(M.clipboardWord(""), "")
-  assert.strictEqual(M.clipboardWord("x".repeat(500)).length, 120)
-})
-
-test("script presets map to dropdown items", () => {
-  assert.strictEqual(M.scriptLabel("cyrillic"), "Cyrillic")
-  assert.strictEqual(M.scriptLabel("Latin"), "Latin")
-  assert.strictEqual(M.scriptLabel("any"), "Any")
-  assert.strictEqual(M.scriptLabel("A-Za-zÀ-ÿ"), "Custom…")
-  assert.strictEqual(M.scriptLabel(""), "Custom…")
-  assert.strictEqual(M.scriptValue("Greek"), "greek")
-  assert.strictEqual(M.scriptValue("Custom…"), "")
-  assert.deepStrictEqual(Array.from(M.scriptLabels()), ["Latin", "Cyrillic", "Greek", "Arabic", "Hebrew", "Any", "Custom…"])
-  for (const label of M.scriptLabels().slice(0, -1))
-    assert.strictEqual(M.scriptLabel(M.scriptValue(label)), label)
-})
-
-test("a custom class still detects", () => {
-  const langs = [{ name: "French", characters: "A-Za-zÀ-ÿ" }, { name: "Russian", characters: "cyrillic" }]
-  assert.deepStrictEqual(Array.from(M.detect("été", langs)), ["French"])
-})
-
-test("matches follow list order (priority)", () => {
-  const langs = [{ name: "Spanish", characters: "latin" }, { name: "English", characters: "latin" }, { name: "Russian", characters: "cyrillic" }]
-  assert.deepStrictEqual(Array.from(M.detect("casa", langs)), ["Spanish", "English"])
-  assert.deepStrictEqual(Array.from(M.normalizeLanguages(langs)).map(l => l.name), ["Spanish", "English", "Russian"])
-})
-
-test("clipboard text per target field", () => {
-  assert.strictEqual(M.clipboardText(" casa\nsecond ", "word"), "casa")
-  assert.strictEqual(M.clipboardText(" line one\r\nline two \n", "context"), "line one\nline two")
-  assert.strictEqual(M.clipboardText("x".repeat(3000), "context").length, 2000)
-  assert.strictEqual(M.clipboardText("a\u0000b", "context"), "")
-})
-
-test("detection skips non-letters", () => {
-  const L = M.defaults()
-  const names = (w) => Array.from(M.detect(w, L))
-  assert.deepStrictEqual(names("don't"), ["English", "Spanish"])
-  assert.deepStrictEqual(names("don’t"), ["English", "Spanish"])
-  assert.deepStrictEqual(names("rock-n-roll"), ["English", "Spanish"])
-  assert.deepStrictEqual(names("Ñandú, ¿qué?"), ["English", "Spanish"])
-  assert.deepStrictEqual(names("cafe\u0301"), ["English", "Spanish"])      // NFD é
-  assert.deepStrictEqual(names("ёлка"), ["Russian"])
-  assert.deepStrictEqual(names("Привет 👋🏽!"), ["Russian"])
-  assert.deepStrictEqual(names("2 кота"), ["Russian"])
-  assert.deepStrictEqual(names("123 !!"), [])                              // no letters
-  assert.deepStrictEqual(names("😀"), [])
-  assert.deepStrictEqual(names("dom дом"), [])                             // mixed scripts
-  assert.deepStrictEqual(names("Tiếng Việt"), ["English", "Spanish"])     // Latin Extended Additional
-})
-
-test("custom character sets are parsed safely", () => {
-  const set = (c) => JSON.parse(JSON.stringify(M.parseClass(c)))
-  assert.deepStrictEqual(set("A-Za-z"), [[65, 90], [97, 122]])
-  assert.deepStrictEqual(set("a-"), [[97, 97], [45, 45]])
-  assert.deepStrictEqual(set("\\u00e9\\x41\\u{1F600}"), [[0xe9, 0xe9], [0x41, 0x41], [0x1f600, 0x1f600]])
-  assert.deepStrictEqual(set("\\]\\\\\\-"), [[93, 93], [92, 92], [45, 45]])
-  assert.deepStrictEqual(set("^]["), [[94, 94], [93, 93], [91, 91]])        // no special meaning
-  assert.strictEqual(set("z-a"), null)                                      // reversed range
-  assert.strictEqual(set("\\u12"), null)                                    // broken escape
-  assert.strictEqual(set("\\u{zz}"), null)
-  assert.strictEqual(set(""), null)
-  assert.ok(M.matchesCharacters("été", "a-zé"))
-  assert.ok(!M.matchesCharacters("été", "z-a"))                            // invalid: matches nothing
-  assert.ok(M.matchesCharacters("ab]", "ab"))                              // ] is punctuation, skipped
-  assert.ok(M.matchesCharacters("гре", "а-яё"))
-  assert.ok(M.matchesCharacters("anything", "any"))
-  assert.ok(M.matchesCharacters("gre", "gre") && !M.matchesCharacters("greek", "gre"))
-})
-
-test("duplicate lookup normalizes Unicode and case", () => {
-  const set = M.wordIndex("- **Cafe\u0301**\n- **ЁЖ**\n- **Straße**\n")
-  assert.ok(M.isCaptured(set, "café"))                                     // NFD in file, NFC typed
-  assert.ok(M.isCaptured(set, "ёж"))
-  assert.ok(!M.isCaptured(set, "еж"))                                      // ё is not folded to е
-  assert.ok(M.isCaptured(set, "STRASSE") === false)                        // no ß -> ss folding
-  assert.ok(M.isCaptured(set, "straße"))
-  assert.strictEqual(M.entryLine({ text: "cafe\u0301", note: "", tag: "" }), "- **caf\u00e9**\n")
-})
-
-test("index counts unique words per tag and builds the toast line", () => {
-  const index = M.wordIndex([
-    "# Words",
-    "- **casa** [Spanish] — house",
-    "- **Casa** [Spanish] — duplicate, not counted",
-    "- **perro** [Spanish]",
-    "- **house** [English]",
-    "- **untagged**",
-    "text with **bold** inside",
   ].join("\n"))
-  assert.strictEqual(index.total, 4)
-  assert.strictEqual(index.byTag.Spanish, 2)
-  assert.strictEqual(index.byTag.English, 1)
-  const fresh = M.addWord(index, M.normalizeWord("gato"), "Spanish")
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(fresh)), { duplicate: false, total: 5, inTag: 3 })
-  assert.strictEqual(M.statsLine(fresh, "Spanish"), "5 words, 3 in Spanish")
-  const again = M.addWord(index, M.normalizeWord("CASA"), "Spanish")
-  assert.strictEqual(M.statsLine(again, "Spanish"), "Already had it. 5 words, 3 in Spanish")
-  assert.strictEqual(M.statsLine(M.addWord(M.emptyIndex(), "w", ""), ""), "1 word")
-  assert.ok(M.isCaptured(index, "gato"))
+  for (const w of ["casa", "  CASA ", "snake_case", "**x**", "привет", "plus", "two words"])
+    assert.ok(M.isCaptured(index, w), w)
+  for (const w of ["bold", "cell", "vocabulary", "", "  "])
+    assert.ok(!M.isCaptured(index, w), w)
 })
 
-test("index takes the language from the tag or the section", () => {
-  const file = "# Vocabulary\n- **simple** [English] — test\n- **loose**\n\n## Spanish\n\n- **casa** [Spanish]\n- **perro**\n### notes\n- **gato**\n\n## C++ (old) [x]\n- **a**\n"
-  const index = M.wordIndex(file)
-  assert.strictEqual(index.total, 6)
-  assert.strictEqual(index.byTag["English"], 1)
-  assert.strictEqual(index.byTag["Spanish"], 3)          // tag, section, and under ###
-  assert.strictEqual(index.byTag["C++ (old) [x]"], 1)
-  assert.strictEqual(index.words["loose"], "")
-  assert.strictEqual(M.headingOf("##   Spanish  "), "Spanish")
-  assert.strictEqual(M.headingOf("# Title"), "")
-  assert.strictEqual(M.headingOf("### sub"), null)
-  assert.strictEqual(M.headingOf("#hashtag"), null)
+test("duplicates ignore case, spacing and Unicode form, not letters", () => {
+  const index = M.wordIndex("- **Cafe\u0301**\n- **ЁЖ**\n- **Straße**\n- **two   words**\n")
+  assert.ok(M.isCaptured(index, "café"))                                     // decomposed in the file
+  assert.ok(M.isCaptured(index, "ёж"))
+  assert.ok(!M.isCaptured(index, "еж"))                                      // ё is not е
+  assert.ok(M.isCaptured(index, "straße"))
+  assert.ok(!M.isCaptured(index, "STRASSE"))                                 // ß is not ss
+  assert.ok(M.isCaptured(index, " Two words "))
 })
 
-test("nameRange selects the file name without its extension", () => {
-  const sel = p => { const r = M.nameRange(p); return p.slice(r[0], r[1]) }
-  assert.strictEqual(sel("~/Documents/words.md"), "words")
-  assert.strictEqual(sel("/a.b/notes"), "notes")
-  assert.strictEqual(sel("/x/.vocab"), ".vocab")
-  assert.strictEqual(sel("/x/my.words.txt"), "my.words")
-  assert.strictEqual(sel("/x/"), "")
+test("a written entry line is found again", () => {
+  for (const w of ["snake_case", "a*b", "back\\slash", "a [b]", "x — y", "Ñandú", "cafe\u0301", "two words"])
+    assert.ok(M.isCaptured(M.wordIndex(M.entryLine({ text: w, note: "n_o*te", tag: "X" })), w), w)
 })
 
-test("prefill fills only an empty target field", () => {
+test("a word saved by append.sh is found again", () => {
+  withScratch((home) => {
+    const words = ["snake_case", "a*b", "back\\slash", "a [b]", "x — y", "cafe\u0301", "дом"]
+    for (const w of words) append(home, "~/w.md", M.entryLine({ text: w, note: "note_1", tag: "Mixed" }).trim(), "Mixed")
+    const index = M.wordIndex(fs.readFileSync(path.join(home, "w.md"), "utf8"))
+    for (const w of words) assert.ok(M.isCaptured(index, w), w)
+    assert.strictEqual(M.statsLine(M.addWord(index, "new", "Mixed"), "Mixed"), "8 words, 8 in Mixed")
+  })
+})
+
+// ---- The toast's counts -----------------------------------------------------------
+
+test("counts come from the [tag], else the ## section", () => {
+  const file = "# Vocabulary\n- **simple** [English] — test\n- **loose**\n\n## Spanish\n\n- **casa** [Spanish]\n- **perro**\n### notes\n- **gato**\n- **Casa** [Spanish] — same word, counted once\n\n## C++ (old) [x]\n- **a**\n"
+  assert.strictEqual(statsAfter(file, "nuevo", "Spanish"), "7 words, 4 in Spanish")
+  assert.strictEqual(statsAfter(file, "new", "English"), "7 words, 2 in English")
+  assert.strictEqual(statsAfter(file, "b", "C++ (old) [x]"), "7 words, 2 in C++ (old) [x]")
+})
+
+test("toast lines", () => {
+  assert.strictEqual(statsAfter("", "casa", "Spanish"), "1 word, 1 in Spanish")
+  assert.strictEqual(statsAfter("- **a**\n", "b", ""), "2 words")
+  const file = "## Spanish\n\n- **casa** [Spanish]\n"
+  assert.strictEqual(statsAfter(file, "perro", "Spanish"), "2 words, 2 in Spanish")
+  assert.strictEqual(statsAfter(file, "Casa", "Spanish"), "Already had it. 1 word, 1 in Spanish")
+  // The same word under another language is still a word you had.
+  assert.strictEqual(statsAfter(file, "casa", "English"), "Already had it. 1 word, 0 in English")
+})
+
+test("Already had it is decided before the save, not after", () => {
+  // The panel checks the word when Enter is pressed; if the index has seen the
+  // new line by the time the save reports back, the word is still new.
+  const file = "## Spanish\n\n- **casa** [Spanish]\n"
+  const wasCaptured = M.isCaptured(M.wordIndex(file), "perro")
+  const reread = M.wordIndex(file + "- **perro** [Spanish]\n")
+  assert.strictEqual(M.statsLine(M.recordCapture(reread, M.normalizeWord("perro"), "Spanish", wasCaptured), "Spanish"), "2 words, 2 in Spanish")
+})
+
+// ---- Panel helpers ----------------------------------------------------------------
+
+test("file name shown in the header", () => {
+  assert.strictEqual(M.fileName("/home/a/Documents/word.md"), "word.md")
+  assert.strictEqual(M.fileName("~/notes.md"), "notes.md")
+  assert.strictEqual(M.fileName(""), "")
+})
+
+test("after the folder chooser, the file name is selected without its extension", () => {
+  const selected = (p) => { const r = M.nameRange(p); return p.slice(r[0], r[1]) }
+  assert.strictEqual(selected("~/Documents/words.md"), "words")
+  assert.strictEqual(selected("/a.b/notes"), "notes")
+  assert.strictEqual(selected("/x/.vocab"), ".vocab")
+  assert.strictEqual(selected("/x/my.words.txt"), "my.words")
+  assert.strictEqual(selected("/x/"), "")
+})
+
+test("clipboard prefill fills only an empty target field", () => {
   assert.strictEqual(M.prefillField("word", "", ""), "word")
   assert.strictEqual(M.prefillField("word", "casa", ""), "")
   assert.strictEqual(M.prefillField("word", " ", "kept note"), "word")
@@ -220,36 +231,28 @@ test("prefill fills only an empty target field", () => {
   assert.strictEqual(M.prefillField("other", "", ""), "word")
 })
 
-test("toast says Already had it only for a word captured before the save", () => {
-  const file = "## Spanish\n\n- **casa** [Spanish]\n"
-  // New word, index not yet re-read: no duplicate, counts go up.
-  let index = M.wordIndex(file)
-  let was = M.isCaptured(index, "perro")
-  assert.strictEqual(M.statsLine(M.recordCapture(index, M.normalizeWord("perro"), "Spanish", was), "Spanish"), "2 words, 2 in Spanish")
-  // New word, the file watch re-read the file (new line included) first: still new.
-  index = M.wordIndex(file)
-  was = M.isCaptured(index, "perro")
-  const reread = M.wordIndex(file + "- **perro** [Spanish]\n")
-  assert.strictEqual(M.statsLine(M.recordCapture(reread, M.normalizeWord("perro"), "Spanish", was), "Spanish"), "2 words, 2 in Spanish")
-  // Existing word: Already had it, counts unchanged.
-  index = M.wordIndex(file)
-  was = M.isCaptured(index, "Casa")
-  assert.strictEqual(M.statsLine(M.recordCapture(index, M.normalizeWord("Casa"), "Spanish", was), "Spanish"), "Already had it. 1 word, 1 in Spanish")
+test("clipboard text for the word field", () => {
+  assert.strictEqual(M.clipboardText("  casa \n", "word"), "casa")
+  assert.strictEqual(M.clipboardText("\n\n first  line \nsecond", "word"), "first line")
+  assert.strictEqual(M.clipboardText("a\u0000b", "word"), "")                // binary
+  assert.strictEqual(M.clipboardText("\ufffdPNG", "word"), "")
+  assert.strictEqual(M.clipboardText("", "word"), "")
+  assert.strictEqual(M.clipboardText("x".repeat(500), "word").length, 120)
 })
 
-test("resolvePath matches append.sh, so the hint checks the file a capture writes", () => {
-  const { execFileSync } = require("child_process")
-  const os = require("os"), path = require("path"), fs = require("fs")
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "wc-home-"))
-  try {
-    for (const input of ["~/a/w.md", "b/w.md", "w.md", home + "/c/w.md", "  ~/d.md  "]) {
-      const out = execFileSync("sh", [path.join(__dirname, "..", "append.sh"), "--touch", input.trim()],
-        { env: { ...process.env, HOME: home } }).toString().trim()
-      assert.strictEqual(M.resolvePath(input, home), out, input)
-    }
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true })
-  }
+test("clipboard text for the context field", () => {
+  assert.strictEqual(M.clipboardText(" line one\r\nline two \n", "context"), "line one\nline two")
+  assert.strictEqual(M.clipboardText("x".repeat(3000), "context").length, 2000)
+  assert.strictEqual(M.clipboardText("a\u0000b", "context"), "")
 })
 
-console.log(passed + " passed")
+test("the panel checks the same file append.sh writes", () => {
+  withScratch((home) => {
+    for (const input of ["~/a/w.md", "b/w.md", "w.md", home + "/c/w.md", "  ~/d.md  "])
+      assert.strictEqual(M.resolvePath(input, home), append(home, "--touch", input.trim()), input)
+    assert.strictEqual(M.resolvePath("  ", home), "")
+  })
+})
+
+console.log("RESULT model " + passed + " " + failed + " 0")
+process.exitCode = failed ? 1 : 0
