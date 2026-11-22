@@ -86,6 +86,26 @@ printf '## A\n' >"$T/real.md"; chmod 640 "$T/real.md"; ln -s "$T/real.md" "$T/li
 run "$T/link.md" "- **x** [A]" A
 [ -L "$T/link.md" ] && [ "$(stat -c %a "$T/real.md")" = 640 ] && pass=$((pass + 1)) || { echo "FAIL: perms/symlink"; exit 1; }
 
+# A save keeps the file's access list (POSIX ACL), so nobody gains access.
+if command -v setfacl >/dev/null && printf '## A\n' >"$T/acl.md" && chmod 640 "$T/acl.md" \
+  && setfacl -m u:nobody:--- "$T/acl.md" 2>/dev/null; then
+  before=$(getfacl -cp "$T/acl.md")
+  run "$T/acl.md" "- **x** [A]" A
+  [ "$(getfacl -cp "$T/acl.md")" = "$before" ] && [ "$(stat -c %a "$T/acl.md")" = 640 ] && pass=$((pass + 1)) || { echo "FAIL: ACL not kept"; getfacl -c "$T/acl.md"; exit 1; }
+  # Where cp cannot copy attributes, a file with an ACL is left untouched and
+  # one without falls back to its mode bits.
+  mkdir "$T/nocp"; printf '#!/bin/sh\nexit 1\n' >"$T/nocp/cp"; chmod +x "$T/nocp/cp"
+  cp "$T/acl.md" "$T/acl.copy"
+  out=$(PATH="$T/nocp:$PATH" ${SH:-sh} "$here/append.sh" "$T/acl.md" "- **y** [A]" A 2>&1 || true)
+  [ "$out" = "Cannot keep the file's access list: $T/acl.md" ] && cmp -s "$T/acl.md" "$T/acl.copy" && pass=$((pass + 1)) || { echo "FAIL: ACL fallback: $out"; exit 1; }
+  printf '## A\n' >"$T/plain.md"; chmod 604 "$T/plain.md"
+  PATH="$T/nocp:$PATH" ${SH:-sh} "$here/append.sh" "$T/plain.md" "- **y** [A]" A >/dev/null
+  [ "$(stat -c %a "$T/plain.md")" = 604 ] && pass=$((pass + 1)) || { echo "FAIL: mode fallback"; exit 1; }
+  rm -rf "$T/nocp" "$T/acl.copy"
+else
+  echo "skip: ACL (no setfacl or no ACL support)"
+fi
+
 # Concurrent writers do not lose entries.
 for i in $(seq 30); do ${SH:-sh} "$here/append.sh" "$T/h.md" "- **w$i** [L$((i % 3))]" "L$((i % 3))" >/dev/null & done; wait
 [ "$(grep -c '^- \*\*w' "$T/h.md")" = 30 ] && [ "$(grep -c '^## ' "$T/h.md")" = 3 ] && pass=$((pass + 1)) || { echo "FAIL: concurrency"; cat "$T/h.md"; exit 1; }
@@ -107,9 +127,9 @@ out=$(${SH:-sh} "$here/append.sh" "$T/w.md" "
 out=$(${SH:-sh} "$here/append.sh" "$T/slash/" x 2>&1 || true); [ "$out" = "Is a directory: $T/slash/" ] && [ ! -e "$T/slash" ] && pass=$((pass + 1)) || { echo "FAIL: trailing slash: $out"; exit 1; }
 
 # A save into an existing file runs at most 6 programs besides sh itself:
-# flock, mktemp, awk, chmod, mv (no dirname, mkdir, tr or sed).
+# flock, mktemp, awk, cp, mv (no dirname, mkdir, tr or sed).
 mkdir "$T/shim"; : >"$T/execs"
-for cmd in flock mktemp awk chmod mv mkdir dirname readlink tr sed cat; do
+for cmd in flock mktemp awk cp chmod mv mkdir dirname readlink tr sed cat; do
   real=$(command -v "$cmd") || continue
   printf '#!/bin/sh\necho %s >>"%s"\nexec %s "$@"\n' "$cmd" "$T/execs" "$real" >"$T/shim/$cmd"; chmod +x "$T/shim/$cmd"
 done

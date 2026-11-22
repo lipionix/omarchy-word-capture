@@ -9,8 +9,9 @@
 # Arguments arrive as argv and reach awk through the environment, so nothing in
 # them is parsed as code. "~" expands and a relative path resolves against
 # $HOME; a symlink is followed. Missing folders are created. The new content is
-# written to a temp file in the same folder, given the original's permissions
-# and renamed over it (atomic). A lock on the folder serialises writers.
+# written to a temp file in the same folder, given the original's mode bits,
+# access list (POSIX ACL) and, where allowed, owner and group, and renamed over
+# it (atomic), so a save never widens who can read the file. A lock on the folder serialises writers.
 # Prints the resolved path; on failure one short line on stderr and exit 1.
 set -u
 
@@ -37,7 +38,7 @@ case $path in
 esac
 [ -L "$path" ] && path=$(readlink -f -- "$path")
 
-# Only builtins up to the lock: a save runs sh, flock, mktemp, awk, chmod
+# Only builtins up to the lock: a save runs sh, flock, mktemp, awk, cp
 # and mv (plus mkdir for a new folder, readlink for a symlink).
 case $path in */) fail "Is a directory: $path" ;; esac
 [ -d "$path" ] && fail "Is a directory: $path"
@@ -87,9 +88,20 @@ if [ "$mode" = touch ]; then printf '%s\n' "$path"; exit 0; fi
       for (i = 1; i <= n; i++) { print lines[i]; if (i == at) print entry }
     }
   ' "$path" >"$tmp" || exit 1
-  chmod --reference="$path" -- "$tmp" 2>/dev/null
+  # The temp file starts private (0600). cp copies mode and ACL in one go;
+  # where that fails (a filesystem without permissions, like FAT), plain mode
+  # bits do, unless the file has an ACL that would be lost: then stop.
+  if ! cp --attributes-only --preserve=mode,ownership -- "$path" "$tmp" 2>/dev/null; then
+    case $(ls -ld -- "$path") in ??????????+*) exit 3 ;; esac
+    chmod --reference="$path" -- "$tmp" 2>/dev/null
+  fi
   mv -f -- "$tmp" "$path" || exit 1
   trap - EXIT
-) 9<"$dir" || fail "Could not write: $path"
+) 9<"$dir"
+case $? in
+  0) ;;
+  3) fail "Cannot keep the file's access list: $path" ;;
+  *) fail "Could not write: $path" ;;
+esac
 
 printf '%s\n' "$path"

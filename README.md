@@ -75,7 +75,8 @@ other text in the file is left as it is.
 
 `*`, `_` and `\` in an entry are escaped so they cannot break the Markdown.
 Context with several lines is saved on one line, its lines joined with ` / `.
-Saving is atomic and locked, so the file is never left half-written.
+Saving is atomic and locked, so the file is never left half-written, and it
+keeps the file's permissions and access list (ACL).
 
 ## Privacy
 
@@ -107,7 +108,7 @@ The second line removes the settings. Your words file is never touched.
   file reads and watches are created then, and Settings when first opened.
   After that the file is watched and re-read only when it changes (about 2 ms
   per thousand entries), once per save. A save runs `sh` and five small
-  programs (`flock`, `mktemp`, `awk`, `chmod`, `mv`).
+  programs (`flock`, `mktemp`, `awk`, `cp`, `mv`).
 - **Settings file.** `${XDG_STATE_HOME:-~/.local/state}/omarchy/word-capture.json`.
   Missing or unreadable settings fall back to the defaults.
 
