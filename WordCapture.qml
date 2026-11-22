@@ -41,12 +41,16 @@ Panel {
   property var captured: ({})
   readonly property bool alreadyCaptured: Model.isCaptured(captured, word)
   property string themeYellow: ""
+  // Nothing is read until the panel is first opened: the bar button alone
+  // costs no file reads, parsing or watching.
+  property bool activated: false
   // The palette's yellow marks an already-captured word; accent if the theme has none.
   readonly property color warning: themeYellow !== "" ? themeYellow : Commons.Color.accent
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
   function open() {
+    activated = true
     settingsOpen = false
     error = ""
     controller.show()
@@ -183,7 +187,7 @@ Panel {
   }
 
   FileView {
-    path: Commons.Color.currentThemePath + "/colors.toml"
+    path: root.activated ? Commons.Color.currentThemePath + "/colors.toml" : ""
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
@@ -194,7 +198,7 @@ Panel {
   // The words file, read and watched in-shell for the "Already captured" hint.
   FileView {
     id: wordsFile
-    path: Model.resolvePath(root.filePath, root.home)
+    path: root.activated ? Model.resolvePath(root.filePath, root.home) : ""
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
@@ -223,7 +227,7 @@ Panel {
 
   Job {
     id: appendProcess
-    command: ["python3", root.pluginDir + "/append.py", root.filePath, root.pendingEntry]
+    command: ["sh", root.pluginDir + "/append.sh", root.filePath, root.pendingEntry]
     onDone: function(ok, output, errors) { root.finish(ok, errors) }
   }
 
@@ -267,7 +271,7 @@ Panel {
 
   Job {
     id: openJob
-    command: ["python3", root.pluginDir + "/append.py", "--touch", root.filePath]
+    command: ["sh", root.pluginDir + "/append.sh", "--touch", root.filePath]
     onDone: function(ok, output, errors) {
       if (ok) Util.execArgv(["omarchy-launch-editor", output])
       else root.notify("Could not open " + root.fileName, errors)

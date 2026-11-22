@@ -198,7 +198,7 @@ function scriptValue(label) {
   return ""
 }
 
-// Same rule as append.py: "~" is home, and a relative path is under home.
+// Same rule as append.sh: "~" is home, and a relative path is under home.
 function resolvePath(path, home) {
   var p = String(path || "").trim()
   if (!p) return ""
@@ -285,7 +285,7 @@ function unescapeMarkdown(value) {
 
 // The one place that decides how a capture looks in the Markdown file:
 // "- **text** [tag] — note", always a single line. Takes named fields so the format can change
-// without touching the panel or the writer (append.py).
+// without touching the panel or the writer (append.sh).
 function entryLine(fields) {
   var text = escapeMarkdown(nfc(safeText(fields.text, 500)).trim().replace(/\s*\r?\n\s*/g, " "))
   // A multi-line note stays one list line: its lines are joined with " / ".
