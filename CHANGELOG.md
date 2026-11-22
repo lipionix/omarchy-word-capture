@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.3
+
+- An existing `## Language` heading is found whatever the case of A to Z and
+  the spacing, and kept as written, so `## spanish` no longer gets a second
+  Spanish section. The notification counts agree.
+- Files with Windows (CRLF) line endings keep them on new lines.
+- Tests rewritten around what users see; `sh tests/run.sh` prints one summary
+  line. The program count moved to an optional `sh tests/perf.sh`.
+
 ## 1.5.2
 
 - Saving keeps the words file's access list (POSIX ACL), owner and group
