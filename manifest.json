@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "alexander.word-capture",
+  "name": "Word Capture",
+  "version": "1.0.0",
+  "author": "Alexander",
+  "description": "Capture words and context into a Markdown vocabulary file.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "WordCapture.qml"
+  },
+  "barWidget": {
+    "displayName": "Word Capture",
+    "description": "Open a quick vocabulary capture form.",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
