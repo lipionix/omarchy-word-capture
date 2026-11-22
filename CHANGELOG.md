@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3
+
+- In Settings, the "Settings" subtitle no longer shows a link cursor; the
+  file-name link exists only in the main view.
+
 ## 1.4.2
 
 - The clipboard option's description is shorter and stays on one line, and

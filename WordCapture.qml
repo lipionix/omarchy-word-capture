@@ -436,8 +436,11 @@ Panel {
               elide: Text.ElideRight
               MouseArea {
                 id: metaLink
+                // Only the file name itself, and only in the main view: a
+                // disabled MouseArea still sets its cursor, so hide it instead.
                 width: Math.min(parent.contentWidth, parent.width)
                 height: parent.height
+                visible: metaLine.isLink
                 enabled: metaLine.isLink
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
