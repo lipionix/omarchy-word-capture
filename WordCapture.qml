@@ -466,8 +466,10 @@ Panel {
           Flickable {
             id: contextFlick
             width: parent.width
-            height: Math.min(contextField.implicitHeight,
-              contextMetrics.lineSpacing * 5 + contextField.topPadding + contextField.bottomPadding)
+            // Height from the typed text only (one line when empty), up to
+            // five lines, then it scrolls.
+            height: Math.min(Math.max(contextField.contentHeight, contextMetrics.lineSpacing), contextMetrics.lineSpacing * 5)
+              + contextField.topPadding + contextField.bottomPadding
             clip: true
             boundsBehavior: Flickable.StopAtBounds
 
@@ -475,7 +477,21 @@ Panel {
               id: contextField
               readonly property var _borderSpec: Border.controlSpec(activeFocus ? "focus" : (hovered ? "hover-cursor" : "normal"), root.foreground, Commons.Color.accent)
               text: root.context
-              placeholderText: "Context, example or note (Shift+Enter for a new line)"
+              // Own one-line placeholder: the control's placeholder wraps and
+              // counts in the implicit height.
+              Text {
+                x: contextField.leftPadding
+                y: contextField.topPadding
+                width: contextField.width - contextField.leftPadding - contextField.rightPadding
+                visible: !contextField.length && !contextField.preeditText
+                textFormat: Text.PlainText
+                text: "Context, example or note"
+                elide: Text.ElideRight
+                wrapMode: Text.NoWrap
+                maximumLineCount: 1
+                color: contextField.placeholderTextColor
+                font: contextField.font
+              }
               wrapMode: TextEdit.Wrap
               hoverEnabled: true
               font.family: Style.font.family
