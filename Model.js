@@ -28,37 +28,141 @@ function normalizeLanguages(value) {
   return out.length ? out : defaults()
 }
 
-function charactersPattern(characters) {
-  var builtIn = {
-    latin: "A-Za-z\\u00c0-\\u024f",
-    cyrillic: "\\u0400-\\u052f",
-    greek: "\\u0370-\\u03ff",
-    arabic: "\\u0600-\\u06ff",
-    hebrew: "\\u0590-\\u05ff"
-  }
-  return builtIn[String(characters).toLowerCase()] || String(characters)
+// ---- Script detection -------------------------------------------------------
+// A word matches a language when every letter in it belongs to that language's
+// character set. Spaces, digits, punctuation (apostrophes, hyphens), symbols,
+// emoji and combining marks are not letters and are skipped; a word with no
+// letters at all matches nothing. Text is NFC-normalized first, so a decomposed
+// "e + U+0301" counts as "é". Sets are lists of code-point ranges; a custom set
+// is parsed by hand (never handed to RegExp), so no input can break it.
+
+var presetRanges = {
+  latin: [[0x41, 0x5a], [0x61, 0x7a], [0xc0, 0x24f], [0x1e00, 0x1eff]],
+  cyrillic: [[0x400, 0x52f], [0x1c80, 0x1c8f], [0x2de0, 0x2dff], [0xa640, 0xa69f]],
+  greek: [[0x370, 0x3ff], [0x1f00, 0x1fff]],
+  arabic: [[0x600, 0x6ff], [0x750, 0x77f], [0x8a0, 0x8ff], [0xfb50, 0xfdff], [0xfe70, 0xfeff]],
+  hebrew: [[0x590, 0x5ff], [0xfb1d, 0xfb4f]]
 }
 
-function matchesCharacters(text, characters) {
-  var value = safeText(text, 3000)
-  if (!value.trim()) return false
-  if (String(characters).toLowerCase() === "any") return true
-  var pattern
-  try { pattern = new RegExp("[" + charactersPattern(characters) + "]") } catch (e) { return false }
-  for (var i = 0; i < value.length; i++) {
-    var ch = value[i]
-    if (/\s|[0-9\u2000-\u206f\u2e00-\u2e7f]/.test(ch)) continue
-    if (!pattern.test(ch)) return false
+// Never letters: controls and spaces, ASCII and Latin-1 punctuation, digits and
+// symbols (× ÷ too), spacing modifiers (ʼ), combining marks, general and
+// supplemental punctuation, currency, arrows/math/shapes/dingbats, CJK
+// punctuation, variation selectors, full-width ASCII punctuation, emoji, tags.
+var skipRanges = [
+  [0x0, 0x40], [0x5b, 0x60], [0x7b, 0xbf], [0xd7, 0xd7], [0xf7, 0xf7],
+  [0x2b0, 0x36f], [0x1ab0, 0x1aff], [0x1dc0, 0x1dff],
+  [0x2000, 0x2bff], [0x2e00, 0x2e7f], [0x3000, 0x303f],
+  [0xfe00, 0xfe2f], [0xfeff, 0xfeff], [0xff01, 0xff20], [0xff3b, 0xff40], [0xff5b, 0xff65],
+  [0x1f000, 0x1faff], [0xe0000, 0xe007f]
+]
+
+function inRanges(cp, ranges) {
+  for (var i = 0; i < ranges.length; i++)
+    if (cp >= ranges[i][0] && cp <= ranges[i][1]) return true
+  return false
+}
+
+// "A-Za-zÀ-ÿ" -> ranges. Every character stands for itself, "x-y" is a range,
+// and a backslash escapes the next character (\- \] \\ \^) or spells one
+// (\u00e9, \u{1f600}, \x41). [ ] ^ have no special meaning. Returns null when
+// the text is not a valid set (a reversed range, a broken escape, empty).
+function parseClass(text) {
+  var src = String(text || "")
+  var i = 0
+  function atom() {
+    if (i >= src.length) return -1
+    var cp = src.codePointAt(i)
+    i += cp > 0xffff ? 2 : 1
+    if (cp !== 0x5c) return cp
+    if (i >= src.length) return -1
+    var next = src.charAt(i)
+    var hex = null
+    if (next === "u" && src.charAt(i + 1) === "{") {
+      var close = src.indexOf("}", i + 2)
+      if (close < 0) return -1
+      hex = src.slice(i + 2, close); i = close + 1
+    } else if (next === "u") {
+      hex = src.slice(i + 1, i + 5); i += 5; if (hex.length !== 4) return -1
+    } else if (next === "x") {
+      hex = src.slice(i + 1, i + 3); i += 3; if (hex.length !== 2) return -1
+    }
+    if (hex !== null) {
+      if (!/^[0-9A-Fa-f]{1,6}$/.test(hex)) return -1
+      var value = parseInt(hex, 16)
+      return value <= 0x10ffff ? value : -1
+    }
+    cp = src.codePointAt(i)
+    i += cp > 0xffff ? 2 : 1
+    return cp
   }
+  var ranges = []
+  while (i < src.length) {
+    var lo = atom()
+    if (lo < 0) return null
+    var hi = lo
+    if (src.charAt(i) === "-" && i + 1 < src.length) {
+      i++
+      hi = atom()
+      if (hi < 0 || hi < lo) return null
+    }
+    ranges.push([lo, hi])
+  }
+  return ranges.length ? ranges : null
+}
+
+// Parsed sets, by their text: parsing happens once, not per keystroke.
+var classCache = {}
+
+// "any" -> true (every letter), preset -> its ranges, custom -> parsed
+// ranges, invalid custom -> null (matches nothing).
+function characterSet(characters) {
+  var key = String(characters || "")
+  if (Object.prototype.hasOwnProperty.call(classCache, key)) return classCache[key]
+  var lower = key.trim().toLowerCase()
+  var set = lower === "any" ? true : (presetRanges[lower] || parseClass(key))
+  classCache[key] = set
+  return set
+}
+
+function nfc(value) {
+  var s = String(value || "")
+  return typeof s.normalize === "function" ? s.normalize("NFC") : s
+}
+
+// The letters of a text, as code points (astral characters stay whole).
+function letters(text) {
+  var value = nfc(safeText(text, 3000))
+  var out = []
+  for (var i = 0; i < value.length;) {
+    var cp = value.codePointAt(i)
+    i += cp > 0xffff ? 2 : 1
+    if (!inRanges(cp, skipRanges)) out.push(cp)
+  }
+  return out
+}
+
+function matchesLetters(cps, characters) {
+  if (!cps.length) return false
+  var set = characterSet(characters)
+  if (set === true) return true
+  if (!set) return false
+  for (var i = 0; i < cps.length; i++)
+    if (!inRanges(cps[i], set)) return false
   return true
 }
 
+function matchesCharacters(text, characters) {
+  return matchesLetters(letters(text), characters)
+}
+
+// Matching languages in list order: the list order is the priority.
 function detect(text, languages) {
+  var cps = letters(text)
   var result = []
+  if (!cps.length) return result
   var list = normalizeLanguages(languages)
-  for (var i = 0; i < list.length; i++) {
-    if (matchesCharacters(text, list[i].characters)) result.push(list[i].name)
-  }
+  for (var i = 0; i < list.length; i++)
+    if (matchesLetters(cps, list[i].characters)) result.push(list[i].name)
   return result
 }
 
@@ -103,9 +207,10 @@ function resolvePath(path, home) {
   return p.charAt(0) === "/" ? p : home + "/" + p
 }
 
-// How two captures compare: unescaped, trimmed, single-spaced, any case.
+// How two captures compare: escapes removed, NFC, trimmed, single-spaced,
+// lower-cased with the locale-independent toLowerCase. ё and е stay different.
 function normalizeWord(value) {
-  return unescapeMarkdown(value).trim().replace(/\s+/g, " ").toLowerCase()
+  return nfc(unescapeMarkdown(value)).trim().replace(/\s+/g, " ").toLowerCase()
 }
 
 // Every "- **word**" in the file, as a set of normalized words. Lines that
@@ -182,9 +287,9 @@ function unescapeMarkdown(value) {
 // "- **text** [tag] — note", always a single line. Takes named fields so the format can change
 // without touching the panel or the writer (append.py).
 function entryLine(fields) {
-  var text = escapeMarkdown(safeText(fields.text, 500).trim().replace(/\s*\r?\n\s*/g, " "))
+  var text = escapeMarkdown(nfc(safeText(fields.text, 500)).trim().replace(/\s*\r?\n\s*/g, " "))
   // A multi-line note stays one list line: its lines are joined with " / ".
-  var note = escapeMarkdown(safeText(fields.note, 2000).split(/\r?\n/)
+  var note = escapeMarkdown(nfc(safeText(fields.note, 2000)).split(/\r?\n/)
     .map(function(line) { return line.trim() })
     .filter(function(line) { return line !== "" })
     .join(" / "))

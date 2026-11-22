@@ -127,4 +127,50 @@ test("clipboard text per target field", () => {
   assert.strictEqual(M.clipboardText("a\u0000b", "context"), "")
 })
 
+test("detection skips non-letters", () => {
+  const L = M.defaults()
+  const names = (w) => Array.from(M.detect(w, L))
+  assert.deepStrictEqual(names("don't"), ["English", "Spanish"])
+  assert.deepStrictEqual(names("don’t"), ["English", "Spanish"])
+  assert.deepStrictEqual(names("rock-n-roll"), ["English", "Spanish"])
+  assert.deepStrictEqual(names("Ñandú, ¿qué?"), ["English", "Spanish"])
+  assert.deepStrictEqual(names("cafe\u0301"), ["English", "Spanish"])      // NFD é
+  assert.deepStrictEqual(names("ёлка"), ["Russian"])
+  assert.deepStrictEqual(names("Привет 👋🏽!"), ["Russian"])
+  assert.deepStrictEqual(names("2 кота"), ["Russian"])
+  assert.deepStrictEqual(names("123 !!"), [])                              // no letters
+  assert.deepStrictEqual(names("😀"), [])
+  assert.deepStrictEqual(names("dom дом"), [])                             // mixed scripts
+  assert.deepStrictEqual(names("Tiếng Việt"), ["English", "Spanish"])     // Latin Extended Additional
+})
+
+test("custom character sets are parsed safely", () => {
+  const set = (c) => JSON.parse(JSON.stringify(M.parseClass(c)))
+  assert.deepStrictEqual(set("A-Za-z"), [[65, 90], [97, 122]])
+  assert.deepStrictEqual(set("a-"), [[97, 97], [45, 45]])
+  assert.deepStrictEqual(set("\\u00e9\\x41\\u{1F600}"), [[0xe9, 0xe9], [0x41, 0x41], [0x1f600, 0x1f600]])
+  assert.deepStrictEqual(set("\\]\\\\\\-"), [[93, 93], [92, 92], [45, 45]])
+  assert.deepStrictEqual(set("^]["), [[94, 94], [93, 93], [91, 91]])        // no special meaning
+  assert.strictEqual(set("z-a"), null)                                      // reversed range
+  assert.strictEqual(set("\\u12"), null)                                    // broken escape
+  assert.strictEqual(set("\\u{zz}"), null)
+  assert.strictEqual(set(""), null)
+  assert.ok(M.matchesCharacters("été", "a-zé"))
+  assert.ok(!M.matchesCharacters("été", "z-a"))                            // invalid: matches nothing
+  assert.ok(M.matchesCharacters("ab]", "ab"))                              // ] is punctuation, skipped
+  assert.ok(M.matchesCharacters("гре", "а-яё"))
+  assert.ok(M.matchesCharacters("anything", "any"))
+  assert.ok(M.matchesCharacters("gre", "gre") && !M.matchesCharacters("greek", "gre"))
+})
+
+test("duplicate lookup normalizes Unicode and case", () => {
+  const set = M.capturedWords("- **Cafe\u0301**\n- **ЁЖ**\n- **Straße**\n")
+  assert.ok(M.isCaptured(set, "café"))                                     // NFD in file, NFC typed
+  assert.ok(M.isCaptured(set, "ёж"))
+  assert.ok(!M.isCaptured(set, "еж"))                                      // ё is not folded to е
+  assert.ok(M.isCaptured(set, "STRASSE") === false)                        // no ß -> ss folding
+  assert.ok(M.isCaptured(set, "straße"))
+  assert.strictEqual(M.entryLine({ text: "cafe\u0301", note: "", tag: "" }), "- **caf\u00e9**\n")
+})
+
 console.log(passed + " passed")
