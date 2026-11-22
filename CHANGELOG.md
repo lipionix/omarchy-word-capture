@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1
+
+- The clipboard option's description names the field it fills (word or
+  context) instead of always saying "word".
+
 ## 1.4.0
 
 - Ready to publish: end-user README, this changelog, `sh tests/run.sh`.

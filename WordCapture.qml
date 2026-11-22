@@ -718,7 +718,7 @@ Panel {
           Toggle {
             width: parent.width
             label: "Prefill from clipboard"
-            description: "On open, put copied text into an empty word field."
+            description: "On open, put copied text into an empty " + (root.prefillTarget === "context" ? "context" : "word") + " field."
             checked: root.prefillClipboard
             foreground: root.foreground
             fontFamily: root.fontFamily
