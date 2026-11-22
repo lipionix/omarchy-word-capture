@@ -531,15 +531,61 @@ Panel {
             width: parent.width
             spacing: Style.space(8)
             PanelSectionHeader { width: parent.width - Style.space(200); text: "LANGUAGE"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
-            Text {
+            // Matching languages as links: a click picks one, and it sticks
+            // for this word like a pick in the dropdown.
+            Item {
               width: Style.space(192)
-              text: root.matches.length ? root.matches.join(", ") : "No match"
-              color: root.matches.length ? root.foreground : root.dim
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              elide: Text.ElideRight
-              horizontalAlignment: Text.AlignRight
+              height: matchRow.height
               anchors.verticalCenter: parent.verticalCenter
+              clip: true
+              Text {
+                anchors.right: parent.right
+                visible: !root.matches.length
+                textFormat: Text.PlainText
+                text: "No match"
+                color: root.dim
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+              Row {
+                id: matchRow
+                anchors.right: parent.right
+                Repeater {
+                  model: root.matches
+                  delegate: Row {
+                    id: matchItem
+                    required property string modelData
+                    required property int index
+                    Text {
+                      textFormat: Text.PlainText
+                      text: matchItem.modelData
+                      color: matchItem.modelData === root.language || matchLink.containsMouse ? root.foreground : root.dim
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.underline: matchLink.containsMouse
+                      MouseArea {
+                        id: matchLink
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                          root.languagePicked = true
+                          root.language = matchItem.modelData
+                          root.saveState()
+                        }
+                      }
+                    }
+                    Text {
+                      visible: matchItem.index < root.matches.length - 1
+                      textFormat: Text.PlainText
+                      text: ", "
+                      color: root.dim
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+                  }
+                }
+              }
             }
           }
           Dropdown {
