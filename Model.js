@@ -70,6 +70,12 @@ function characterSuggestions(text) {
   return characterPresets.filter(function(name) { return name.indexOf(query) !== -1 })
 }
 
+// "~/Documents/word.md" -> "word.md", for the panel's meta line.
+function fileName(path) {
+  var parts = String(path || "").trim().split("/")
+  return parts[parts.length - 1] || ""
+}
+
 // Backslash-escape what would turn part of a capture into Markdown emphasis
 // (or into an escape itself): \ * _. Everything else stays readable as typed.
 function escapeMarkdown(value) {

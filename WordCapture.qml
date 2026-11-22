@@ -27,6 +27,8 @@ Panel {
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
+  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  readonly property string fileName: Model.fileName(filePath)
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
@@ -176,29 +178,32 @@ Panel {
         anchors.fill: parent
         spacing: Style.space(12)
 
-        Row {
+        // Same header as the built-in panels: the bar glyph, a title, and the
+        // target file as the meta line. Esc or a click outside closes.
+        PanelHero {
           width: parent.width
-          spacing: Style.space(12)
-          Text { width: parent.width - Style.space(170); textFormat: Text.PlainText; text: root.settingsOpen ? "WORD CAPTURE / SETTINGS" : "WORD CAPTURE"; color: root.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true; elide: Text.ElideRight; anchors.verticalCenter: parent.verticalCenter }
-          Button {
-            width: Style.space(75)
-            text: root.settingsOpen ? "BACK" : "SETTINGS"
-            fontSize: Style.font.bodySmall
-            foreground: root.foreground
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            anchors.verticalCenter: parent.verticalCenter
-            onClicked: root.settingsOpen = !root.settingsOpen
+          title: "Word capture"
+          meta: root.settingsOpen ? "Settings" : (root.fileName || "No file set")
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          iconComponent: Component {
+            Text {
+              textFormat: Text.PlainText
+              text: button.text
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.display
+            }
           }
-          Button {
-            width: Style.space(60)
-            text: "CLOSE"
-            fontSize: Style.font.bodySmall
-            foreground: root.foreground
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            anchors.verticalCenter: parent.verticalCenter
-            onClicked: root.close()
+          trailingControl: Component {
+            PanelActionButton {
+              iconText: root.settingsOpen ? "󰁍" : "󰒓"
+              tooltipText: root.settingsOpen ? "Back" : "Settings"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              focusable: true
+              onClicked: root.settingsOpen = !root.settingsOpen
+            }
           }
         }
 

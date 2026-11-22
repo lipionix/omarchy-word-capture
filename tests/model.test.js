@@ -36,4 +36,10 @@ test("detects by script", () => {
   assert.deepStrictEqual(Array.from(M.detect("hola", M.defaults())), ["English", "Spanish"])
 })
 
+test("file name for the meta line", () => {
+  assert.strictEqual(M.fileName("/home/a/Documents/word.md"), "word.md")
+  assert.strictEqual(M.fileName("~/notes.md"), "notes.md")
+  assert.strictEqual(M.fileName(""), "")
+})
+
 console.log(passed + " passed")
