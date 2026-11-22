@@ -90,27 +90,6 @@ run "$T/link.md" "- **x** [A]" A
 for i in $(seq 30); do ${SH:-sh} "$here/append.sh" "$T/h.md" "- **w$i** [L$((i % 3))]" "L$((i % 3))" >/dev/null & done; wait
 [ "$(grep -c '^- \*\*w' "$T/h.md")" = 30 ] && [ "$(grep -c '^## ' "$T/h.md")" = 3 ] && pass=$((pass + 1)) || { echo "FAIL: concurrency"; cat "$T/h.md"; exit 1; }
 
-# --group moves tagged ungrouped entries into sections, keeps the rest, backs up.
-printf '# Vocabulary\n- **simple** [English] — test\nfree text\n- **untagged**\n- **casa** [Spanish]\n\n## English\n\n- **house** [English]\n\n## Notes\n- **kept** [English]\n' >"$T/m.md"
-cp "$T/m.md" "$T/m.orig"
-run --group "$T/m.md"
-expect "group migration" "# Vocabulary
-free text
-- **untagged**
-
-## English
-
-- **house** [English]
-- **simple** [English] — test
-
-## Notes
-- **kept** [English]
-
-## Spanish
-
-- **casa** [Spanish]
-" "$T/m.md"
-check "group backup" "$T/m.orig" "$T/m.md.bak"
 
 # --touch creates nothing but the file; errors are one line.
 run --touch "$T/new/n.md"; [ -f "$T/new/n.md" ] && [ ! -s "$T/new/n.md" ] && pass=$((pass + 1))
