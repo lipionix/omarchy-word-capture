@@ -9,8 +9,6 @@ import "Model.js" as Model
 Panel {
   id: root
   moduleName: "alexander.word-capture"
-  ipcTarget: "alexander.word-capture"
-  manageIpc: false
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -129,13 +127,16 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
-    focusTarget: panel.loadedContent
+    // The content stays loaded between opens, so focus the word field on
+    // every open rather than once at creation.
+    focusTarget: panel.loadedContent ? panel.loadedContent.wordField : null
     contentWidth: panel.fittedContentWidth(Style.space(420))
     // Follow the content, never a fixed height: fixed heights leave dead space.
     contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(620))
 
     content: PanelKeyCatcher {
       id: keyCatcher
+      property alias wordField: wordField
       anchors.fill: parent
       implicitHeight: contentColumn.implicitHeight
 
@@ -193,11 +194,11 @@ Panel {
             id: wordField
             width: parent.width
             focus: true
-            Component.onCompleted: Qt.callLater(forceActiveFocus)
             text: root.word
             placeholderText: "Type a word or phrase"
             foreground: root.foreground
             onTextChanged: { root.word = text; root.updateDetection() }
+            onAccepted: root.submit()
           }
 
           Text { text: "CONTEXT / EXAMPLE"; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
@@ -207,7 +208,8 @@ Panel {
             text: root.context
             placeholderText: "Meaning or an example sentence"
             foreground: root.foreground
-            onTextChanged: { root.context = text; root.updateDetection() }
+            onTextChanged: root.context = text
+            onAccepted: root.submit()
           }
 
           Row {
@@ -243,7 +245,7 @@ Panel {
 
           Button {
             width: parent.width
-            text: root.writing ? "SAVING" : "CAPTURE  /  CTRL+ENTER"
+            text: root.writing ? "SAVING" : "CAPTURE  /  ENTER"
             fontFamily: Style.font.family
             foreground: root.foreground
             fontSize: Style.font.body
