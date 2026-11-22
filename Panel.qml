@@ -99,7 +99,10 @@ Panel {
   function updateDetection() {
     // Detect from the word field only: mixing in context would cancel a
     // script match whenever the two fields use different alphabets.
-    matches = Model.detect(word, languages)
+    // Reassigned only when the list changes, so the hint row and its
+    // bindings are not rebuilt on every keystroke.
+    var next = Model.detect(word, languages)
+    if (next.join("\n") !== matches.join("\n")) matches = next
     if (!word.trim()) languagePicked = false
     // List order is priority: the first match wins, unless a language was
     // picked by hand for this word and still matches.
