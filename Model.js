@@ -320,6 +320,16 @@ function clipboardText(raw, target) {
 }
 
 // "~/Documents/word.md" -> "word.md", for the panel's meta line.
+// [start, end) of the file name in a path, without its extension, for
+// selecting it ("~/notes/words.md" -> the "words"). Dotfiles keep their dot.
+function nameRange(path) {
+  var text = String(path || "")
+  var start = text.lastIndexOf("/") + 1
+  var dot = text.lastIndexOf(".")
+  var end = dot > start ? dot : text.length
+  return [start, end]
+}
+
 function fileName(path) {
   var parts = String(path || "").trim().split("/")
   return parts[parts.length - 1] || ""

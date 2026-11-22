@@ -209,4 +209,13 @@ test("index takes the language from the tag or the section", () => {
   assert.strictEqual(M.headingOf("#hashtag"), null)
 })
 
+test("nameRange selects the file name without its extension", () => {
+  const sel = p => { const r = M.nameRange(p); return p.slice(r[0], r[1]) }
+  assert.strictEqual(sel("~/Documents/words.md"), "words")
+  assert.strictEqual(sel("/a.b/notes"), "notes")
+  assert.strictEqual(sel("/x/.vocab"), ".vocab")
+  assert.strictEqual(sel("/x/my.words.txt"), "my.words")
+  assert.strictEqual(sel("/x/"), "")
+})
+
 console.log(passed + " passed")

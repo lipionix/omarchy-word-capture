@@ -52,9 +52,13 @@ Panel {
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
+  // Reopened after the folder chooser: Settings, path field focused, file name selected.
+  property bool pathFocus: false
+
   function open() {
     activated = true
     settingsOpen = false
+    pathFocus = false
     error = ""
     controller.show()
     // Only an empty target field takes the clipboard, so a kept draft wins.
@@ -63,6 +67,7 @@ Panel {
   }
   function close() {
     settingsOpen = false
+    pathFocus = false
     controller.hide()
   }
   function toggle() { opened ? close() : open() }
@@ -160,10 +165,19 @@ Panel {
     saveState()
   }
 
-  // The desktop folder chooser (Omarchy's own helper), as the built-in panels
-  // use it: close the panel first (the dialog is a normal window under the
-  // panel's layer), then report the result as a toast. Cancel does nothing.
-  // The file name is kept; only its folder changes.
+  // The desktop folder chooser (Omarchy's own helper). The panel is a
+  // full-screen overlay layer that holds the keyboard, so the dialog (a normal
+  // window) would open underneath it: close the panel for the chooser, then
+  // reopen it in Settings once the chooser returns, pick or cancel. The file
+  // name is kept; only its folder changes.
+  function reopenForPath() {
+    activated = true
+    error = ""
+    settingsOpen = true
+    pathFocus = true
+    controller.show()
+  }
+
   function pickFolder() {
     if (pickJob.running) return
     pickJob.command = ["omarchy-file-select", "--title", "Folder for " + (fileName || "words.md"), "--directory"]
@@ -276,10 +290,10 @@ Panel {
       var folder = picked.replace(/\/+$/, "")  // "/" becomes "", then "/name"
       if (ok && picked) {
         root.setFilePath(folder + "/" + (root.fileName || "words.md"))
-        root.notify("Words file", root.filePath)
       } else if (errors) {
         root.notify("File chooser failed", errors)
       }
+      root.reopenForPath()
     }
   }
 
@@ -314,7 +328,9 @@ Panel {
     open: root.opened
     // The content stays loaded between opens, so focus the word field on
     // every open rather than once at creation.
-    focusTarget: panel.loadedContent ? panel.loadedContent.wordField : null
+    focusTarget: panel.loadedContent
+      ? (root.pathFocus ? panel.loadedContent.pathField : panel.loadedContent.wordField)
+      : null
     contentWidth: panel.fittedContentWidth(Style.space(420))
     // Follow the content, never a fixed height: fixed heights leave dead space.
     contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(620))
@@ -322,6 +338,7 @@ Panel {
     content: PanelKeyCatcher {
       id: keyCatcher
       property alias wordField: wordField
+      property alias pathField: pathField
       anchors.fill: parent
       implicitHeight: contentColumn.implicitHeight
 
@@ -539,10 +556,17 @@ Panel {
             width: parent.width
             spacing: Style.spacing.controlGap
             TextField {
+              id: pathField
               width: parent.width - folderButton.width - parent.spacing
               text: root.filePath
               foreground: root.foreground
               onEditingFinished: root.setFilePath(text)
+              // After the folder chooser: select the file name (not its
+              // extension) so typing renames just the file.
+              onActiveFocusChanged: if (activeFocus && root.pathFocus) {
+                var range = Model.nameRange(text)
+                select(range[0], range[1])
+              }
             }
             PanelActionButton {
               id: folderButton
