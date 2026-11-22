@@ -151,7 +151,12 @@ The second line removes the settings. Your words file is never touched.
   cleanup.
 - `append.sh`: writes one entry into its section (temp file, atomic rename,
   `flock`).
-- Tests: `sh tests/run.sh` (needs `node`).
+- Tests: `sh tests/run.sh` runs the logic tests (needs `node`) and the
+  writer tests (under `sh`, and `bash` when installed), then prints one
+  summary line; the exit status is non-zero on any failure.
+- Performance check, not part of the default run: `sh tests/perf.sh` (or
+  `sh tests/run.sh --perf`) counts the programs one save starts (budget: five
+  besides `sh`) and times saves into a 5000-line file.
 - After editing the QML, run `omarchy restart shell`.
 
 ## License
