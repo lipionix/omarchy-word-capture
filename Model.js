@@ -102,6 +102,19 @@ function isCaptured(set, word) {
   return key !== "" && set !== null && typeof set === "object" && set[key] === true
 }
 
+// Clipboard text worth prefilling: the first non-empty line, single-spaced,
+// capped. Anything that looks binary (NUL or replacement characters) is "".
+function clipboardWord(raw) {
+  var text = String(raw || "")
+  if (/[\u0000\ufffd]/.test(text)) return ""
+  var lines = text.split(/\r?\n/)
+  for (var i = 0; i < lines.length; i++) {
+    var line = safeText(lines[i], 4000).replace(/\s+/g, " ").trim()
+    if (line) return line.slice(0, 120).trim()
+  }
+  return ""
+}
+
 // "~/Documents/word.md" -> "word.md", for the panel's meta line.
 function fileName(path) {
   var parts = String(path || "").trim().split("/")

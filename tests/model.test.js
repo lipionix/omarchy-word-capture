@@ -79,4 +79,13 @@ test("resolves paths like append.py", () => {
   assert.strictEqual(M.resolvePath(" ", "/home/a"), "")
 })
 
+test("clipboard prefill text", () => {
+  assert.strictEqual(M.clipboardWord("  casa \n"), "casa")
+  assert.strictEqual(M.clipboardWord("\n\n first  line \nsecond"), "first line")
+  assert.strictEqual(M.clipboardWord("a\u0000b"), "")
+  assert.strictEqual(M.clipboardWord("\ufffdPNG"), "")
+  assert.strictEqual(M.clipboardWord(""), "")
+  assert.strictEqual(M.clipboardWord("x".repeat(500)).length, 120)
+})
+
 console.log(passed + " passed")

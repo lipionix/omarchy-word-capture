@@ -20,6 +20,7 @@ Panel {
   property var languages: Model.defaults()
   property var matches: []
   property bool settingsOpen: false
+  property bool prefillClipboard: false
   property bool writing: false
   property string pendingEntry: ""
   property string error: ""
@@ -40,6 +41,8 @@ Panel {
     settingsOpen = false
     error = ""
     controller.show()
+    // Only an empty field takes the clipboard, so a kept draft always wins.
+    if (prefillClipboard && !word.trim() && !clipboardJob.running) clipboardJob.running = true
   }
   function close() {
     settingsOpen = false
@@ -53,11 +56,12 @@ Panel {
       if (state.filePath) filePath = Model.safeText(state.filePath, 500)
       if (state.languages) languages = Model.normalizeLanguages(state.languages)
       if (state.language) language = Model.safeText(state.language, 40)
+      if (typeof state.prefillClipboard === "boolean") prefillClipboard = state.prefillClipboard
     } catch (e) {}
   }
 
   function saveState() {
-    stateFile.setText(JSON.stringify({ filePath: filePath, languages: languages, language: language }) + "\n")
+    stateFile.setText(JSON.stringify({ filePath: filePath, languages: languages, language: language, prefillClipboard: prefillClipboard }) + "\n")
   }
 
   function updateDetection() {
@@ -165,6 +169,24 @@ Panel {
     id: appendProcess
     command: ["python3", root.pluginDir + "/append.py", root.filePath, root.pendingEntry]
     onDone: function(ok, output, errors) { root.finish(ok, errors) }
+  }
+
+  // "-t text" asks for a text type; an image-only clipboard fails and is ignored.
+  Job {
+    id: clipboardJob
+    command: ["wl-paste", "-n", "-t", "text"]
+    onDone: function(ok, output, errors) {
+      var text = ok ? Model.clipboardWord(output) : ""
+      if (!text || !root.opened || root.word.trim()) return
+      root.word = text
+      // Select it so typing replaces it.
+      Qt.callLater(function() {
+        var field = panel.loadedContent ? panel.loadedContent.wordField : null
+        if (!field) return
+        field.forceActiveFocus()
+        field.selectAll()
+      })
+    }
   }
 
   Job {
@@ -352,6 +374,15 @@ Panel {
           spacing: Style.space(10)
           PanelSectionHeader { text: "MARKDOWN FILE"; foreground: root.foreground }
           TextField { width: parent.width; text: root.filePath; foreground: root.foreground; onEditingFinished: { root.filePath = text; root.saveState() } }
+          Toggle {
+            width: parent.width
+            label: "Prefill from clipboard"
+            description: "On open, put copied text into an empty word field."
+            checked: root.prefillClipboard
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onClicked: { root.prefillClipboard = !root.prefillClipboard; root.saveState() }
+          }
           PanelSectionHeader { text: "DISTINGUISHABLE CHARACTERS"; foreground: root.foreground }
           ListView {
             width: parent.width
