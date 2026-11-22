@@ -23,6 +23,12 @@ case $# in
   *) fail "usage: append.sh <path> <line> [section] | --touch <path>" ;;
 esac
 
+# Entries are one line and a section name one trimmed line (done in awk);
+# a blank entry is refused before anything is created.
+if [ "$mode" = add ]; then
+  case $line in *[![:space:]]*) ;; *) fail "Nothing to write" ;; esac
+fi
+
 case $path in
   "~") path=$HOME ;;
   "~/"*) path=$HOME/${path#"~/"} ;;
@@ -31,17 +37,16 @@ case $path in
 esac
 [ -L "$path" ] && path=$(readlink -f -- "$path")
 
+# Only builtins up to the lock: a save runs sh, flock, mktemp, awk, chmod
+# and mv (plus mkdir for a new folder, readlink for a symlink).
+case $path in */) fail "Is a directory: $path" ;; esac
 [ -d "$path" ] && fail "Is a directory: $path"
-dir=$(dirname -- "$path")
-mkdir -p -- "$dir" 2>/dev/null || fail "Cannot create folder: $dir"
+dir=${path%/*}
+[ -n "$dir" ] || dir=/
+[ -d "$dir" ] || mkdir -p -- "$dir" 2>/dev/null || fail "Cannot create folder: $dir"
 true 2>/dev/null >>"$path" || fail "Permission denied: $path"
 
 if [ "$mode" = touch ]; then printf '%s\n' "$path"; exit 0; fi
-
-# Entries are one line; a section name is one trimmed line.
-line=$(printf '%s' "$line" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
-section=$(printf '%s' "$section" | tr '\n' ' ' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-[ -z "$line" ] && fail "Nothing to write"
 
 (
   flock 9 || exit 1
@@ -49,6 +54,8 @@ section=$(printf '%s' "$section" | tr '\n' ' ' | sed 's/^[[:space:]]*//; s/[[:sp
   trap 'rm -f -- "$tmp"' EXIT
   WC_LINE=$line WC_SECTION=$section awk '
     function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    # One line: newlines become spaces, outer whitespace goes.
+    function oneLine(s) { gsub(/\n/, " ", s); sub(/^[ \t\r\v\f]+/, "", s); sub(/[ \t\r\v\f]+$/, "", s); return s }
     # "## Name" -> "Name"; other headings of level 1-2 -> a non-matching marker.
     function heading(s,   t) {
       if (s ~ /^##[ \t]/) return trim(substr(s, 3))
@@ -57,7 +64,9 @@ section=$(printf '%s' "$section" | tr '\n' ' ' | sed 's/^[[:space:]]*//; s/[[:sp
     }
     { lines[++n] = $0 }
     END {
-      want = ENVIRON["WC_SECTION"]; entry = ENVIRON["WC_LINE"]
+      want = oneLine(ENVIRON["WC_SECTION"]); entry = ENVIRON["WC_LINE"]
+      # Leading whitespace of an entry is kept, as before; only the end trims.
+      gsub(/\n/, " ", entry); sub(/[ \t\r\v\f]+$/, "", entry)
       if (want == "") { for (i = 1; i <= n; i++) print lines[i]; print entry; exit }
       start = 0; stop = n
       for (i = 1; i <= n; i++) {

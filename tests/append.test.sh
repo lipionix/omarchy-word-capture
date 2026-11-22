@@ -90,6 +90,33 @@ run "$T/link.md" "- **x** [A]" A
 for i in $(seq 30); do ${SH:-sh} "$here/append.sh" "$T/h.md" "- **w$i** [L$((i % 3))]" "L$((i % 3))" >/dev/null & done; wait
 [ "$(grep -c '^- \*\*w' "$T/h.md")" = 30 ] && [ "$(grep -c '^## ' "$T/h.md")" = 3 ] && pass=$((pass + 1)) || { echo "FAIL: concurrency"; cat "$T/h.md"; exit 1; }
 
+# Multi-line input: newlines become spaces, the entry's end and the section's
+# ends are trimmed, as the panel sends them.
+run "$T/m.md" "- **one**
+two  
+" "  Multi
+line "
+expect "multi-line entry and section" "## Multi line
+
+- **one** two
+" "$T/m.md"
+
+# Whitespace only is refused; a trailing slash is a folder, not created.
+out=$(${SH:-sh} "$here/append.sh" "$T/w.md" "  
+" A 2>&1 || true); [ "$out" = "Nothing to write" ] && [ ! -e "$T/w.md" ] && pass=$((pass + 1)) || { echo "FAIL: blank entry: $out"; exit 1; }
+out=$(${SH:-sh} "$here/append.sh" "$T/slash/" x 2>&1 || true); [ "$out" = "Is a directory: $T/slash/" ] && [ ! -e "$T/slash" ] && pass=$((pass + 1)) || { echo "FAIL: trailing slash: $out"; exit 1; }
+
+# A save into an existing file runs at most 6 programs besides sh itself:
+# flock, mktemp, awk, chmod, mv (no dirname, mkdir, tr or sed).
+mkdir "$T/shim"; : >"$T/execs"
+for cmd in flock mktemp awk chmod mv mkdir dirname readlink tr sed cat; do
+  real=$(command -v "$cmd") || continue
+  printf '#!/bin/sh\necho %s >>"%s"\nexec %s "$@"\n' "$cmd" "$T/execs" "$real" >"$T/shim/$cmd"; chmod +x "$T/shim/$cmd"
+done
+printf '## A\n' >"$T/p.md"
+PATH="$T/shim:$PATH" ${SH:-sh} "$here/append.sh" "$T/p.md" "- **x** [A]" A >/dev/null
+n=$(wc -l <"$T/execs"); [ "$n" -le 6 ] && pass=$((pass + 1)) || { echo "FAIL: $n programs per save:"; cat "$T/execs"; exit 1; }
+rm -rf "$T/shim" "$T/execs"
 
 # --touch creates nothing but the file; errors are one line.
 run --touch "$T/new/n.md"; [ -f "$T/new/n.md" ] && [ ! -s "$T/new/n.md" ] && pass=$((pass + 1))
