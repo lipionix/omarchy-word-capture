@@ -77,10 +77,26 @@ Panel {
   function finish(ok, message) {
     writing = false
     if (!ok) { error = message || "Could not write to " + filePath; return }
+    notify("Captured " + word.trim(), fileName)
     word = ""
     context = ""
     pendingEntry = ""
     close()
+  }
+
+  // Toasts go through omarchy-notification-send, as the built-in panels do.
+  function notify(headline, description) {
+    var argv = ["omarchy-notification-send", "-g", button.text, headline]
+    if (description) argv.push(description)
+    Util.execArgv(argv)
+  }
+
+  // Right-click: open the words file in the Omarchy default editor, creating
+  // it first so a fresh setup opens an empty file instead of failing.
+  function openFile() {
+    if (openJob.running) return
+    if (!filePath.trim()) { notify("Word capture", "Set a Markdown file in Settings."); return }
+    openJob.running = true
   }
 
   function updateLanguage(index, name, characters) {
@@ -109,24 +125,38 @@ Panel {
     onLoaded: root.loadState(text())
   }
 
-  Process {
+  // A Process that reports once it has exited AND both streams have ended:
+  // the three arrive in no guaranteed order.
+  component Job: Process {
+    id: job
+    signal done(bool ok, string output, string errors)
+    property int exitCode: -1
+    property int streamsDone: 0
+    function settle() {
+      if (exitCode < 0 || streamsDone < 2) return
+      var ok = exitCode === 0
+      exitCode = -1
+      streamsDone = 0
+      done(ok, String(outCollector.text || "").trim(), String(errCollector.text || "").trim())
+    }
+    stdout: StdioCollector { id: outCollector; waitForEnd: true; onStreamFinished: { job.streamsDone++; job.settle() } }
+    stderr: StdioCollector { id: errCollector; waitForEnd: true; onStreamFinished: { job.streamsDone++; job.settle() } }
+    onExited: function(code) { exitCode = code; settle() }
+  }
+
+  Job {
     id: appendProcess
     command: ["python3", root.pluginDir + "/append.py", root.filePath, root.pendingEntry]
-    // Exit and end-of-stderr have no guaranteed order: finish once both landed.
-    property int exitCode: -1
-    property bool errorsRead: false
-    function settle() {
-      if (exitCode < 0 || !errorsRead) return
-      root.finish(exitCode === 0, String(appendErrors.text || "").trim())
-      exitCode = -1
-      errorsRead = false
+    onDone: function(ok, output, errors) { root.finish(ok, errors) }
+  }
+
+  Job {
+    id: openJob
+    command: ["python3", root.pluginDir + "/append.py", "--touch", root.filePath]
+    onDone: function(ok, output, errors) {
+      if (ok) Util.execArgv(["omarchy-launch-editor", output])
+      else root.notify("Could not open " + root.fileName, errors)
     }
-    stderr: StdioCollector {
-      id: appendErrors
-      waitForEnd: true
-      onStreamFinished: { appendProcess.errorsRead = true; appendProcess.settle() }
-    }
-    onExited: function(code) { exitCode = code; settle() }
   }
 
   BarIconButton {
@@ -138,8 +168,8 @@ Panel {
     text: "󰗛"
     tooltipText: "Word capture"
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton || buttonCode === Qt.MiddleButton) return
-      root.toggle()
+      if (buttonCode === Qt.RightButton) root.openFile()
+      else if (buttonCode !== Qt.MiddleButton) root.toggle()
     }
   }
 
