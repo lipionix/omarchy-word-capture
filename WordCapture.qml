@@ -666,7 +666,25 @@ Panel {
           visible: root.settingsOpen
           width: parent.width
           spacing: Style.spacing.rowGap
-          PanelSectionHeader { text: "MARKDOWN FILE"; foreground: root.foreground }
+          // Header row like LANGUAGE: the "new file" hint sits on the right.
+          Row {
+            width: parent.width
+            spacing: Style.space(8)
+            PanelSectionHeader { width: parent.width - Style.space(200); text: "MARKDOWN FILE"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
+            Text {
+              width: Style.space(192)
+              // Opacity, not visibility: the row keeps its height either way.
+              opacity: root.pathMissing ? 1 : 0
+              textFormat: Text.PlainText
+              text: "Created on first capture"
+              color: root.dim
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              elide: Text.ElideRight
+              horizontalAlignment: Text.AlignRight
+              anchors.verticalCenter: parent.verticalCenter
+            }
+          }
           Row {
             width: parent.width
             spacing: Style.spacing.controlGap
@@ -695,17 +713,6 @@ Panel {
               enabled: !pickJob.running
               onClicked: root.pickFolder()
             }
-          }
-          // Always takes its line, so the hint never moves the layout.
-          Text {
-            width: parent.width
-            textFormat: Text.PlainText
-            text: "New file, created on first capture"
-            opacity: root.pathMissing ? 1 : 0
-            color: root.dim
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            elide: Text.ElideRight
           }
           Toggle {
             width: parent.width
