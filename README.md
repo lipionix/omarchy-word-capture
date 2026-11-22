@@ -41,7 +41,8 @@ When several languages match, the names next to LANGUAGE show them; click one
 or use the dropdown to choose, and your choice holds for that word.
 
 **Already captured.** While you type a word that is already in the file, the
-word field gets a yellow border and a hint says so. You can still save it.
+word field gets a border in your theme's warning color (the shell's urgent
+color, the one it uses for warnings) and a hint says so. You can still save it.
 
 **Settings.**
 
@@ -102,16 +103,18 @@ The second line removes the settings. Your words file is never touched.
   nothing.
 - **Duplicates.** Words are compared case-insensitively after normalizing
   Unicode and spaces, so `Casa` equals `casa`.
-- **Cost.** Nothing is read before the panel is first opened. After that the
-  file is watched and re-read only when it changes (about 2 ms per thousand
-  entries).
+- **Cost.** Until the first click the bar holds only the icon: the panel,
+  file reads and watches are created then, and Settings when first opened.
+  After that the file is watched and re-read only when it changes (about 2 ms
+  per thousand entries), once per save. A save runs `sh` and five small
+  programs (`flock`, `mktemp`, `awk`, `chmod`, `mv`).
 - **Settings file.** `${XDG_STATE_HOME:-~/.local/state}/omarchy/word-capture.json`.
   Missing or unreadable settings fall back to the defaults.
 
 ## Development
 
-- `WordCapture.qml`: the bar button and panel, built from the shell's own
-  components.
+- `WordCapture.qml`: the bar button; it creates the panel on first use.
+- `Panel.qml`: the panel, built from the shell's own components.
 - `Model.js`: language detection, entry format, duplicate index, clipboard
   cleanup.
 - `append.sh`: writes one entry into its section (temp file, atomic rename,
