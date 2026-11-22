@@ -2,7 +2,9 @@
 
 An Omarchy bar widget for collecting vocabulary. Click the book icon, type a
 word, optionally add context, press Enter. One Markdown line is appended to
-your vocabulary file and a toast confirms it:
+your vocabulary file and a toast confirms it with your counts, e.g.
+"Captured casa · 128 words · 42 Spanish" ("already had it" first when the word
+was in the file already):
 
 ```markdown
 - **casa** [Spanish] — la casa es grande
@@ -21,12 +23,14 @@ stays one list line, its lines joined with ` / `.
 | Enter               | Capture (from the word or context field), close, toast |
 | Shift+Enter         | New line in the context field (grows to 5 lines, then scrolls) |
 | Esc / click outside | Close; the draft is kept for next time                 |
-| Settings (gear)     | Words file, clipboard prefill, languages               |
+| Settings (gear)     | Words file (type a path, or the folder icon to choose one, the file-plus icon to name a new one), clipboard prefill, languages |
 
 - **Already captured**: while you type, the word field's border turns the
   theme's yellow (`colors.toml` `yellow`) and a dim hint shows when the word is
   already in the file (case-insensitive, compared on the `**word**` part).
   Saving is still allowed. The file is watched, so edits made elsewhere count.
+  It is read only after the panel is first opened, then re-read only when it
+  changes; lookups are one hash hit per keystroke.
 - **Prefill from clipboard** (Settings, off by default): choose the field it
   fills, Word (default) or Context. Opening the panel with that field empty
   fills it: Word gets the clipboard's first line, selected so typing replaces
@@ -44,12 +48,16 @@ stays one list line, its lines joined with ` / `.
 ## Files
 
 - `WordCapture.qml` — bar button and panel, built from the shell's own
-  `Panel`, `KeyboardPanel`, `PanelHero`, `PanelSectionHeader`, `Toggle`.
+  `Panel`, `KeyboardPanel`, `PanelSectionHeader`, `PanelActionButton`,
+  `Dropdown`, `Toggle`, `TextField`.
 - `Model.js` — language detection and script presets, `entryLine()` (the one place that defines
-  the line format), escaping, duplicate parsing, clipboard cleanup.
-- `append.py` — appends one line (or `--touch` to only create the file):
+  the line format), escaping, the words index (duplicates and counts per tag), clipboard cleanup.
+- `append.sh` — appends one line (or `--touch` to only create the file):
   creates missing folders, expands `~`, resolves relative paths against
-  `$HOME`, adds a newline if the file lacks one, locks the file while writing.
+  `$HOME`, adds a newline if the file lacks one, locks the file (`flock`)
+  while writing. Plain `sh`, no Python start-up.
+- `new-file.py` — the desktop save dialog (portal `SaveFile`) for New file;
+  Choose a file uses Omarchy's `omarchy-file-select`.
 - `tests/model.test.js` — logic tests: `node tests/model.test.js`.
 - State: `~/.local/state/omarchy/word-capture.json` (`filePath`, `languages`,
   `language`, `prefillClipboard`, `prefillTarget`). Missing keys take their
@@ -63,4 +71,5 @@ add `{ "id": "alexander.word-capture" }` to a bar section in
 `omarchy restart shell`: the shell notices local plugin changes, but a running
 shell can keep the previously compiled QML.
 
-Requires `python3` and `wl-clipboard` (both present on Omarchy).
+Requires `wl-clipboard`, and `python3` with PyGObject for the New file dialog
+(all present on Omarchy).
