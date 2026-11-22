@@ -153,6 +153,15 @@ function themeYellow(raw) {
   return fallback
 }
 
+// Clipboard text for the chosen field: the word takes one line (above); the
+// context keeps its lines, capped at 2000 characters. Binary gives "".
+function clipboardText(raw, target) {
+  if (target !== "context") return clipboardWord(raw)
+  var text = String(raw || "")
+  if (/[\u0000\ufffd]/.test(text)) return ""
+  return safeText(text.replace(/\r\n?/g, "\n"), 2000).trim()
+}
+
 // "~/Documents/word.md" -> "word.md", for the panel's meta line.
 function fileName(path) {
   var parts = String(path || "").trim().split("/")

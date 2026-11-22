@@ -120,4 +120,11 @@ test("matches follow list order (priority)", () => {
   assert.deepStrictEqual(Array.from(M.normalizeLanguages(langs)).map(l => l.name), ["Spanish", "English", "Russian"])
 })
 
+test("clipboard text per target field", () => {
+  assert.strictEqual(M.clipboardText(" casa\nsecond ", "word"), "casa")
+  assert.strictEqual(M.clipboardText(" line one\r\nline two \n", "context"), "line one\nline two")
+  assert.strictEqual(M.clipboardText("x".repeat(3000), "context").length, 2000)
+  assert.strictEqual(M.clipboardText("a\u0000b", "context"), "")
+})
+
 console.log(passed + " passed")

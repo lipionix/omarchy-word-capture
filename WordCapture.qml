@@ -25,6 +25,8 @@ Panel {
   property bool languagePicked: false
   property bool settingsOpen: false
   property bool prefillClipboard: false
+  // Which field the clipboard fills: "word" (default) or "context".
+  property string prefillTarget: "word"
   property bool writing: false
   property string pendingEntry: ""
   property string error: ""
@@ -48,8 +50,9 @@ Panel {
     settingsOpen = false
     error = ""
     controller.show()
-    // Only an empty field takes the clipboard, so a kept draft always wins.
-    if (prefillClipboard && !word.trim() && !clipboardJob.running) clipboardJob.running = true
+    // Only an empty target field takes the clipboard, so a kept draft wins.
+    var targetEmpty = prefillTarget === "context" ? !context.trim() : !word.trim()
+    if (prefillClipboard && targetEmpty && !clipboardJob.running) clipboardJob.running = true
   }
   function close() {
     settingsOpen = false
@@ -64,11 +67,12 @@ Panel {
       if (state.languages) languages = Model.normalizeLanguages(state.languages)
       if (state.language) language = Model.safeText(state.language, 40)
       if (typeof state.prefillClipboard === "boolean") prefillClipboard = state.prefillClipboard
+      if (state.prefillTarget === "word" || state.prefillTarget === "context") prefillTarget = state.prefillTarget
     } catch (e) {}
   }
 
   function saveState() {
-    stateFile.setText(JSON.stringify({ filePath: filePath, languages: languages, language: language, prefillClipboard: prefillClipboard }) + "\n")
+    stateFile.setText(JSON.stringify({ filePath: filePath, languages: languages, language: language, prefillClipboard: prefillClipboard, prefillTarget: prefillTarget }) + "\n")
   }
 
   function updateDetection() {
@@ -207,8 +211,14 @@ Panel {
     id: clipboardJob
     command: ["wl-paste", "-n", "-t", "text"]
     onDone: function(ok, output, errors) {
-      var text = ok ? Model.clipboardWord(output) : ""
-      if (!text || !root.opened || root.word.trim()) return
+      var target = root.prefillTarget
+      var text = ok ? Model.clipboardText(output, target) : ""
+      if (!text || !root.opened) return
+      if (target === "context") {
+        if (!root.context.trim()) root.context = text
+        return
+      }
+      if (root.word.trim()) return
       root.word = text
       // Select it so typing replaces it.
       Qt.callLater(function() {
@@ -462,6 +472,21 @@ Panel {
             foreground: root.foreground
             fontFamily: root.fontFamily
             onClicked: { root.prefillClipboard = !root.prefillClipboard; root.saveState() }
+          }
+          Row {
+            visible: root.prefillClipboard
+            width: parent.width
+            spacing: Style.spacing.controlGap
+            PanelSectionHeader { text: "FILL"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
+            ButtonGroup {
+              anchors.verticalCenter: parent.verticalCenter
+              options: [{ value: "word", label: "Word" }, { value: "context", label: "Context" }]
+              value: root.prefillTarget
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.bodySmall
+              onChanged: function(value) { root.prefillTarget = value; root.saveState() }
+            }
           }
           PanelSectionHeader { text: "LANGUAGES"; foreground: root.foreground }
           ListView {
