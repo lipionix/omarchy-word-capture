@@ -381,15 +381,28 @@ Panel {
               elide: Text.ElideRight
             }
             Text {
+              id: metaLine
+              // The file name opens the file (as right-click on the bar icon does).
+              readonly property bool isLink: !root.settingsOpen && root.fileName !== ""
               width: parent.width
               textFormat: Text.PlainText
               text: (root.settingsOpen ? "Settings" : (root.fileName || "No file set")).toUpperCase()
               color: Qt.darker(root.foreground, 1.4)
+              font.underline: isLink && metaLink.containsMouse
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.bold: true
               font.letterSpacing: 1.2
               elide: Text.ElideRight
+              MouseArea {
+                id: metaLink
+                width: Math.min(parent.contentWidth, parent.width)
+                height: parent.height
+                enabled: metaLine.isLink
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: { root.close(); root.openFile() }
+              }
             }
           }
           PanelActionButton {
