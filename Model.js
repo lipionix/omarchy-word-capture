@@ -274,13 +274,21 @@ function isCaptured(index, word) {
   return key !== "" && !!index && !!index.words && Object.prototype.hasOwnProperty.call(index.words, key)
 }
 
-// The toast line after a save: "128 words · 42 Spanish", led by
-// "already had it" when the word was in the file before.
+// The toast line after a save: "128 words, 42 in Spanish", led by
+// "Already had it." when the word was in the file before.
 function statsLine(result, tag) {
   var text = result.total + (result.total === 1 ? " word" : " words")
   var name = String(tag || "").trim()
   if (name) text += ", " + result.inTag + " in " + name
   return (result.duplicate ? "Already had it. " : "") + text
+}
+
+// Which field the clipboard prefill fills: the target, only while it is
+// empty; the other field never blocks it. "" means fill nothing.
+function prefillField(target, word, context) {
+  var field = target === "context" ? "context" : "word"
+  var current = field === "context" ? context : word
+  return String(current || "").trim() ? "" : field
 }
 
 // Clipboard text worth prefilling: the first non-empty line, single-spaced,

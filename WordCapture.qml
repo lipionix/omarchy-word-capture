@@ -61,9 +61,10 @@ Panel {
     pathFocus = false
     error = ""
     controller.show()
-    // Only an empty target field takes the clipboard, so a kept draft wins.
-    var targetEmpty = prefillTarget === "context" ? !context.trim() : !word.trim()
-    if (prefillClipboard && targetEmpty && !clipboardJob.running) clipboardJob.running = true
+    // Only the target field takes the clipboard, and only when it is empty;
+    // a draft in the other field does not matter.
+    if (prefillClipboard && Model.prefillField(prefillTarget, word, context) && !clipboardJob.running)
+      clipboardJob.running = true
   }
   function close() {
     settingsOpen = false
@@ -266,18 +267,18 @@ Panel {
       var target = root.prefillTarget
       var text = ok ? Model.clipboardText(output, target) : ""
       if (!text || !root.opened) return
-      if (target === "context") {
-        if (!root.context.trim()) root.context = text
-        return
-      }
-      if (root.word.trim()) return
-      root.word = text
-      // Select it so typing replaces it.
+      // Recheck: the target may have been typed into while wl-paste ran.
+      if (Model.prefillField(target, root.word, root.context) !== target) return
+      if (target === "context") root.context = text
+      else root.word = text
+      // Focus the other field, ready to type: word filled -> context, and the
+      // other way round.
       Qt.callLater(function() {
-        var field = panel.loadedContent ? panel.loadedContent.wordField : null
+        var content = panel.loadedContent
+        var field = content ? (target === "context" ? content.wordField : content.contextField) : null
         if (!field) return
         field.forceActiveFocus()
-        field.selectAll()
+        if (field.cursorPosition !== undefined) field.cursorPosition = field.text.length
       })
     }
   }
@@ -339,6 +340,7 @@ Panel {
       id: keyCatcher
       property alias wordField: wordField
       property alias pathField: pathField
+      property alias contextField: contextField
       anchors.fill: parent
       implicitHeight: contentColumn.implicitHeight
 

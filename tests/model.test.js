@@ -218,4 +218,13 @@ test("nameRange selects the file name without its extension", () => {
   assert.strictEqual(sel("/x/"), "")
 })
 
+test("prefill fills only an empty target field", () => {
+  assert.strictEqual(M.prefillField("word", "", ""), "word")
+  assert.strictEqual(M.prefillField("word", "casa", ""), "")
+  assert.strictEqual(M.prefillField("word", " ", "kept note"), "word")
+  assert.strictEqual(M.prefillField("context", "kept word", ""), "context")
+  assert.strictEqual(M.prefillField("context", "", "note"), "")
+  assert.strictEqual(M.prefillField("other", "", ""), "word")
+})
+
 console.log(passed + " passed")
