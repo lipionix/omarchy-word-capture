@@ -424,9 +424,10 @@ Panel {
             // while the word is already in the file.
             background: BorderSurface {
               color: Style.controlFill(wordField._focused, wordField._hot, wordField.foreground, wordField.accent)
-              // The shell's own border states, drawn in the theme's yellow.
+              // Full theme yellow at the field's own border width. The shell's
+              // control states fade a border to 40-60% alpha, which hides it.
               borderSpec: root.alreadyCaptured
-                ? Border.controlSpec(wordField._focused ? "focus" : (wordField._hot ? "hover-cursor" : "normal"), root.warning, root.warning)
+                ? Border.flat(root.warning, Math.max(1, Border.uniformWidth(wordField._borderSpec)))
                 : wordField._borderSpec
               radius: Style.cornerRadius
             }
