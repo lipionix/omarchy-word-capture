@@ -227,4 +227,21 @@ test("prefill fills only an empty target field", () => {
   assert.strictEqual(M.prefillField("other", "", ""), "word")
 })
 
+test("toast says Already had it only for a word captured before the save", () => {
+  const file = "## Spanish\n\n- **casa** [Spanish]\n"
+  // New word, index not yet re-read: no duplicate, counts go up.
+  let index = M.wordIndex(file)
+  let was = M.isCaptured(index, "perro")
+  assert.strictEqual(M.statsLine(M.recordCapture(index, M.normalizeWord("perro"), "Spanish", was), "Spanish"), "2 words, 2 in Spanish")
+  // New word, the file watch re-read the file (new line included) first: still new.
+  index = M.wordIndex(file)
+  was = M.isCaptured(index, "perro")
+  const reread = M.wordIndex(file + "- **perro** [Spanish]\n")
+  assert.strictEqual(M.statsLine(M.recordCapture(reread, M.normalizeWord("perro"), "Spanish", was), "Spanish"), "2 words, 2 in Spanish")
+  // Existing word: Already had it, counts unchanged.
+  index = M.wordIndex(file)
+  was = M.isCaptured(index, "Casa")
+  assert.strictEqual(M.statsLine(M.recordCapture(index, M.normalizeWord("Casa"), "Spanish", was), "Spanish"), "Already had it. 1 word, 1 in Spanish")
+})
+
 console.log(passed + " passed")

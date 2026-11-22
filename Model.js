@@ -274,6 +274,15 @@ function isCaptured(index, word) {
   return key !== "" && !!index && !!index.words && Object.prototype.hasOwnProperty.call(index.words, key)
 }
 
+// Count a saved word for the toast. "duplicate" comes from wasCaptured, the
+// check made before the write: the file watch can re-read the file (new line
+// included) before the save reports back, so the index alone cannot tell.
+function recordCapture(index, key, tag, wasCaptured) {
+  var result = addWord(index, key, tag)
+  result.duplicate = !!wasCaptured
+  return result
+}
+
 // The toast line after a save: "128 words, 42 in Spanish", led by
 // "Already had it." when the word was in the file before.
 function statsLine(result, tag) {

@@ -29,6 +29,7 @@ Panel {
   property string prefillTarget: "word"
   property bool writing: false
   property string pendingEntry: ""
+  property bool pendingDuplicate: false
   property string error: ""
   readonly property string pluginDir: decodeURIComponent(String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")).replace(/\/$/, "")
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
@@ -117,6 +118,8 @@ Panel {
     if (!filePath.trim()) { error = "Set a Markdown file in Settings."; return }
     error = ""
     pendingEntry = Model.entryLine({ text: word, note: context, tag: language })
+    // Decide "already had it" now, before the write can reach the index.
+    pendingDuplicate = alreadyCaptured
     writing = true
     appendProcess.running = true
   }
@@ -128,7 +131,7 @@ Panel {
     // watch re-syncs it from disk afterwards.
     var stats = ""
     if (indexLoaded) {
-      stats = Model.statsLine(Model.addWord(wordIndex, Model.normalizeWord(word), language), language)
+      stats = Model.statsLine(Model.recordCapture(wordIndex, Model.normalizeWord(word), language, pendingDuplicate), language)
       indexVersion++
     }
     // Clicking the toast opens the file: the notification service runs the
