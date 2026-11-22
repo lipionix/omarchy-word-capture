@@ -257,20 +257,6 @@ function headingOf(line) {
   return m[1] === "##" ? (m[2] || "") : ""
 }
 
-// Capture lines that sit outside any "## " section (append.sh --group can
-// move the tagged ones into their sections).
-function ungroupedCount(text) {
-  var lines = String(text || "").split("\n")
-  var section = ""
-  var count = 0
-  for (var i = 0; i < lines.length; i++) {
-    var h = lines[i].charAt(0) === "#" ? headingOf(lines[i]) : null
-    if (h !== null) { section = h; continue }
-    if (!section && /^\s*[-*+]\s+\*\*/.test(lines[i])) count++
-  }
-  return count
-}
-
 // Record one word; returns { duplicate, total, inTag } after the change.
 function addWord(index, key, tag) {
   var name = String(tag || "").trim()
@@ -291,12 +277,10 @@ function isCaptured(index, word) {
 // The toast line after a save: "128 words · 42 Spanish", led by
 // "already had it" when the word was in the file before.
 function statsLine(result, tag) {
-  var parts = []
-  if (result.duplicate) parts.push("already had it")
-  parts.push(result.total + (result.total === 1 ? " word" : " words"))
+  var text = result.total + (result.total === 1 ? " word" : " words")
   var name = String(tag || "").trim()
-  if (name) parts.push(result.inTag + " " + name)
-  return parts.join(" · ")
+  if (name) text += ", " + result.inTag + " in " + name
+  return (result.duplicate ? "Already had it. " : "") + text
 }
 
 // Clipboard text worth prefilling: the first non-empty line, single-spaced,
