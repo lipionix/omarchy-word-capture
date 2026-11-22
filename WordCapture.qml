@@ -13,7 +13,8 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  property string statePath: Quickshell.env("HOME") + "/.local/state/omarchy/word-capture.json"
+  // Settings live with the other Omarchy plugin state (XDG state dir).
+  property string statePath: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/omarchy/word-capture.json"
   property string word: ""
   property string context: ""
   property string language: "English"
@@ -76,7 +77,7 @@ Panel {
 
   function loadState(raw) {
     try {
-      var state = JSON.parse(String(raw || "{}"))
+      const state = JSON.parse(String(raw || "{}"))
       if (state.filePath) filePath = Model.safeText(state.filePath, 500)
       if (state.languages) languages = Model.normalizeLanguages(state.languages)
       if (state.language) language = Model.safeText(state.language, 40)
@@ -552,8 +553,8 @@ Panel {
                 } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
                   // Tab moves on, as in the other fields, instead of typing a tab.
                   event.accepted = true
-                  var back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier)
-                  var next = contextField.nextItemInFocusChain(!back)
+                  const back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier)
+                  const next = contextField.nextItemInFocusChain(!back)
                   if (next) next.forceActiveFocus()
                 }
               }
