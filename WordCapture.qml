@@ -717,12 +717,23 @@ Panel {
           }
           Toggle {
             width: parent.width
+            // Sized by the longer description (the hidden twin below), so
+            // switching Word/Context never changes the row's height.
+            height: prefillSizer.implicitHeight
             label: "Prefill from clipboard"
-            description: "On open, put copied text into an empty " + (root.prefillTarget === "context" ? "context" : "word") + " field."
+            description: root.prefillTarget === "context" ? prefillSizer.description : "Fills an empty word field on open."
             checked: root.prefillClipboard
             foreground: root.foreground
             fontFamily: root.fontFamily
             onClicked: { root.prefillClipboard = !root.prefillClipboard; root.saveState() }
+          }
+          Toggle {
+            id: prefillSizer
+            visible: false
+            width: parent.width
+            label: "Prefill from clipboard"
+            description: "Fills an empty context field on open."
+            fontFamily: root.fontFamily
           }
           Row {
             visible: root.prefillClipboard

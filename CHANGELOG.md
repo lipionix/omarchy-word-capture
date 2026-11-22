@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.2
+
+- The clipboard option's description is shorter and stays on one line, and
+  the row keeps the same height for Word and Context.
+
 ## 1.4.1
 
 - The clipboard option's description names the field it fills (word or
