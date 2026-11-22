@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.2
+
+- Saving keeps the words file's access list (POSIX ACL), owner and group
+  where allowed, not only its mode bits, so a save never widens who can read
+  the file. If an ACL cannot be kept, the save stops with an error instead.
+- The save notification names the word that was submitted, even if the
+  field changed while it was being written.
+
 ## 1.5.1
 
 - Moving a language up or down slides the row to its new place, so it is easy
