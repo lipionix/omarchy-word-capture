@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1
+
+- Moving a language up or down slides the row to its new place, so it is easy
+  to follow. The row keeps its controls, so a focused arrow can be pressed
+  again. No animation when Omarchy's animations are off.
+
 ## 1.5.0
 
 - Lighter: the bar holds only the icon until the first click, which creates

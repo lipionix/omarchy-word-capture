@@ -115,6 +115,9 @@ Panel {
     var next = languages.slice()
     var item = next.splice(index, 1)[0]
     next.splice(target, 0, item)
+    // Move the row itself first: the list animates it to its new place and
+    // keeps its controls, so the same arrow can be clicked again.
+    languageModel.move(index, target, 1)
     languages = Model.normalizeLanguages(next)
     saveState()
     updateDetection()
@@ -209,6 +212,7 @@ Panel {
     if (languages.length < 2) return
     var next = languages.slice()
     next.splice(index, 1)
+    languageModel.remove(index)
     languages = Model.normalizeLanguages(next)
     if (!languages.some(function(item) { return item.name === language })) language = languages[0].name
     saveState()
@@ -224,7 +228,22 @@ Panel {
     blockLoading: true
     printErrors: false
   }
-  Component.onCompleted: loadState(stateFile.text())
+  Component.onCompleted: { loadState(stateFile.text()); syncLanguageModel() }
+
+  // The settings list's rows. A ListModel rather than the array itself, so a
+  // reorder is a move the list can animate instead of a rebuild.
+  ListModel { id: languageModel }
+  onLanguagesChanged: syncLanguageModel()
+  function syncLanguageModel() {
+    for (var i = 0; i < languages.length; i++) {
+      var item = languages[i]
+      if (i >= languageModel.count) { languageModel.append({ name: item.name, characters: item.characters }); continue }
+      var row = languageModel.get(i)
+      if (row.name !== item.name) languageModel.setProperty(i, "name", item.name)
+      if (row.characters !== item.characters) languageModel.setProperty(i, "characters", item.characters)
+    }
+    while (languageModel.count > languages.length) languageModel.remove(languageModel.count - 1)
+  }
 
 
   // Set while our own save's re-read is pending (see finish()).
@@ -766,16 +785,25 @@ Panel {
                 width: parent.width
                 // Shrink to content; only scroll once the list is genuinely tall.
                 height: Math.min(contentHeight, Style.space(260))
-                model: root.languages
+                model: languageModel
                 clip: true
                 spacing: Style.spacing.rowGap
+                // A reordered row slides to its new place, and the row it
+                // swaps with slides the other way: the shell's own timing and
+                // ease-out, none with animations off (Style.duration).
+                move: Transition {
+                  NumberAnimation { property: "y"; duration: Style.duration(160); easing.type: Easing.Bezier; easing.bezierCurve: Style.easeOut }
+                }
+                moveDisplaced: Transition {
+                  NumberAnimation { property: "y"; duration: Style.duration(160); easing.type: Easing.Bezier; easing.bezierCurve: Style.easeOut }
+                }
                 // One line per language: name, script, remove. A custom character
                 // class gets its own field under the line, only for Custom….
                 delegate: Column {
                   id: langRow
                   property int langIndex: index
-                  property string langName: modelData.name
-                  property string langCharacters: modelData.characters
+                  property string langName: model.name
+                  property string langCharacters: model.characters
                   readonly property bool storedCustom: Model.scriptLabel(langCharacters) === Model.customScript
                   // Custom… picked but no class typed yet: nothing to save until there is.
                   property bool customPicked: false
