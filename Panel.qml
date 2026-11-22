@@ -55,9 +55,6 @@ Panel {
   // Bumped when the index changes in place (after a save), so bindings re-read it.
   property int indexVersion: 0
   readonly property bool alreadyCaptured: indexVersion >= 0 && Model.isCaptured(wordIndex, word)
-  property string themeYellow: ""
-  // The palette's yellow marks an already-captured word; accent if the theme has none.
-  readonly property color warning: themeYellow !== "" ? themeYellow : Commons.Color.accent
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
@@ -229,14 +226,6 @@ Panel {
   }
   Component.onCompleted: loadState(stateFile.text())
 
-  FileView {
-    path: Commons.Color.currentThemePath + "/colors.toml"
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.themeYellow = Model.themeYellow(text())
-    onLoadFailed: root.themeYellow = ""
-  }
 
   // Set while our own save's re-read is pending (see finish()).
   property bool ownReload: false
@@ -480,14 +469,15 @@ Panel {
             foreground: root.foreground
             onTextChanged: { root.word = text; root.error = ""; root.updateDetection() }
             onAccepted: root.submit()
-            // Same surface as every TextField; only the border turns yellow
-            // while the word is already in the file.
+            // Same surface as every TextField; only the border changes while
+            // the word is already in the file.
             background: BorderSurface {
               color: Style.controlFill(wordField._focused, wordField._hot, wordField.foreground, wordField.accent)
-              // Full theme yellow at the field's own border width. The shell's
-              // control states fade a border to 40-60% alpha, which hides it.
+              // The theme's urgent color, the one the shell itself uses for
+              // warnings, in full at the field's own border width (the
+              // control states fade a border to 40-60% alpha, which hides it).
               borderSpec: root.alreadyCaptured
-                ? Border.flat(root.warning, Math.max(1, Border.uniformWidth(wordField._borderSpec)))
+                ? Border.flat(root.urgent, Math.max(1, Border.uniformWidth(wordField._borderSpec)))
                 : wordField._borderSpec
               radius: Style.cornerRadius
             }
@@ -497,7 +487,8 @@ Panel {
             visible: root.alreadyCaptured
             textFormat: Text.PlainText
             text: "Already captured"
-            color: root.dim
+            // A warning caption in urgent, as the network and agents panels do.
+            color: root.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
