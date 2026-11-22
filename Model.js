@@ -124,9 +124,10 @@ function characterSet(characters) {
   return set
 }
 
+// NFC only matters past ASCII; skipping it there keeps the common case cheap.
 function nfc(value) {
   var s = String(value || "")
-  return typeof s.normalize === "function" ? s.normalize("NFC") : s
+  return /[^\x00-\x7f]/.test(s) && typeof s.normalize === "function" ? s.normalize("NFC") : s
 }
 
 // The letters of a text, as code points (astral characters stay whole).
@@ -136,7 +137,10 @@ function letters(text) {
   for (var i = 0; i < value.length;) {
     var cp = value.codePointAt(i)
     i += cp > 0xffff ? 2 : 1
-    if (!inRanges(cp, skipRanges)) out.push(cp)
+    if (cp < 0x80) {
+      // ASCII fast path: only A-Z and a-z are letters.
+      if ((cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a)) out.push(cp)
+    } else if (!inRanges(cp, skipRanges)) out.push(cp)
   }
   return out
 }
@@ -210,7 +214,12 @@ function resolvePath(path, home) {
 // How two captures compare: escapes removed, NFC, trimmed, single-spaced,
 // lower-cased with the locale-independent toLowerCase. ё and е stay different.
 function normalizeWord(value) {
-  return nfc(unescapeMarkdown(value)).trim().replace(/\s+/g, " ").toLowerCase()
+  return keyOf(nfc(unescapeMarkdown(value)))
+}
+
+// normalizeWord for text that is already NFC (the whole file is normalized once).
+function keyOf(value) {
+  return unescapeMarkdown(value).trim().replace(/\s+/g, " ").toLowerCase()
 }
 
 // The words file as an index: every "- **word** [Tag]" line, by normalized
@@ -223,18 +232,19 @@ function emptyIndex() {
 
 function wordIndex(text) {
   var index = emptyIndex()
-  var lines = String(text || "").split("\n")
+  // One NFC pass over the whole file is far cheaper than one per line.
+  var lines = nfc(text).split("\n")
   var pattern = /^\s*[-*+]\s+\*\*((?:\\.|[^\\*])+)\*\*(?:\s*\[([^\]\n]*)\])?/
   // The language of a line is its [Tag], else the "## " section it sits in.
   var section = ""
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i]
-    var h = headingOf(line)
+    var h = line.charAt(0) === "#" ? headingOf(line) : null
     if (h !== null) { section = h; continue }
     // Cheap pre-check before the regex: a capture line has "**" early on.
     if (line.indexOf("**") < 0) continue
     var match = pattern.exec(line)
-    if (match) addWord(index, normalizeWord(match[1]), match[2] || section)
+    if (match) addWord(index, keyOf(match[1]), match[2] || section)
   }
   return index
 }
@@ -254,7 +264,7 @@ function ungroupedCount(text) {
   var section = ""
   var count = 0
   for (var i = 0; i < lines.length; i++) {
-    var h = headingOf(lines[i])
+    var h = lines[i].charAt(0) === "#" ? headingOf(lines[i]) : null
     if (h !== null) { section = h; continue }
     if (!section && /^\s*[-*+]\s+\*\*/.test(lines[i])) count++
   }
