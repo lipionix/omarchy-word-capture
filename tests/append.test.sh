@@ -245,6 +245,45 @@ t_permissions_are_kept() {
   ok "mode stays 640" [ "$(stat -c %a "$D/w.md")" = 640 ]
 }
 
+# A group the user is in other than the primary one, for files that belong
+# to a shared group; empty if there is none.
+other_group() {
+  for g in $(id -G); do [ "$g" != "$(id -g)" ] && { echo "$g"; return; }; done
+}
+
+t_group_is_kept() {
+  g=$(other_group); [ -n "$g" ] || { skip "user is in only one group"; return; }
+  printf '## A\n' >"$D/w.md"; chgrp "$g" "$D/w.md"; chmod 640 "$D/w.md"
+  save "$D/w.md" "- **x** [A]" A
+  ok "group unchanged" [ "$(stat -c %g "$D/w.md")" = "$g" ]
+  ok "mode unchanged" [ "$(stat -c %a "$D/w.md")" = 640 ]
+}
+
+# Where the new file cannot get the original group (in a shared folder, a
+# group the saver is not in), the save must not hand the notes to the saver's
+# group. Simulated with a cp that copies everything but owner and group.
+t_group_that_cannot_be_kept_stays_with_the_file() {
+  g=$(other_group); [ -n "$g" ] || { skip "user is in only one group"; return; }
+  [ "$(id -u)" = 0 ] && { skip "running as root"; return; }
+  mkdir "$D/bin"
+  printf '#!/bin/sh\nfor a; do shift; case $a in --preserve=*) set -- "$@" --preserve=mode ;; *) set -- "$@" "$a" ;; esac; done\nexec %s "$@"\n' "$(command -v cp)" >"$D/bin/cp"
+  chmod +x "$D/bin/cp"
+  printf '## A\n\n- **old** [A]\n' >"$D/w.md"; chgrp "$g" "$D/w.md"; chmod 640 "$D/w.md"
+  inode=$(stat -c %i "$D/w.md")
+  saved_path=$PATH; PATH="$D/bin:$PATH"
+  save "$D/w.md" "- **new** [A]" A
+  PATH=$saved_path
+  ok "group unchanged" [ "$(stat -c %g "$D/w.md")" = "$g" ]
+  ok "mode unchanged" [ "$(stat -c %a "$D/w.md")" = 640 ]
+  ok "same file, not a replacement" [ "$(stat -c %i "$D/w.md")" = "$inode" ]
+  same "$D/w.md" "## A
+
+- **old** [A]
+- **new** [A]
+"
+  no_temp_files "$D"
+}
+
 acl_ready() {
   command -v setfacl >/dev/null && command -v getfacl >/dev/null \
     && printf '## A\n' >"$1" && chmod 640 "$1" && setfacl -m u:nobody:--- "$1" 2>/dev/null
@@ -315,6 +354,7 @@ t_crlf_files_stay_crlf t_empty_section_gets_a_blank_line_first
 t_no_section_appends_literal_text t_multi_line_input_becomes_one_line
 t_missing_folders_are_created t_touch_creates_an_empty_file_only
 t_prints_the_resolved_path t_symlink_is_followed t_permissions_are_kept
+t_group_is_kept t_group_that_cannot_be_kept_stays_with_the_file
 t_access_list_is_kept t_access_list_that_cannot_be_kept_stops_the_save
 t_concurrent_saves_lose_nothing t_blank_entry_is_refused
 t_folder_paths_are_refused t_unwritable_targets_are_reported"

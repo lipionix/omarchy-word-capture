@@ -110,7 +110,9 @@ is, and a file with Windows (CRLF) line endings keeps them on new lines too.
 `*`, `_` and `\` in an entry are escaped so they cannot break the Markdown.
 Context with several lines is saved on one line, its lines joined with ` / `.
 Saving is atomic and locked, so the file is never left half-written, and it
-keeps the file's permissions and access list (ACL).
+keeps the file's permissions, access list (ACL), owner and group. In a shared
+folder where the new file could not get the same owner or group, the entry is
+written into the existing file instead.
 
 ## Privacy
 

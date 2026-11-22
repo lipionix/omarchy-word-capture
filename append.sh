@@ -10,8 +10,9 @@
 # them is parsed as code. "~" expands and a relative path resolves against
 # $HOME; a symlink is followed. Missing folders are created. The new content is
 # written to a temp file in the same folder, given the original's mode bits,
-# access list (POSIX ACL) and, where allowed, owner and group, and renamed over
-# it (atomic), so a save never widens who can read the file. A lock on the folder serialises writers.
+# access list (POSIX ACL), owner and group, and renamed over it (atomic). If
+# the owner or group cannot be carried over, the content is written into the
+# original file instead. Either way a save never widens who can read it. A lock on the folder serialises writers.
 # Prints the resolved path; on failure one short line on stderr and exit 1.
 set -u
 
@@ -107,8 +108,19 @@ if [ "$mode" = touch ]; then printf '%s\n' "$path"; exit 0; fi
     case $(ls -ld -- "$path") in ??????????+*) exit 3 ;; esac
     chmod --reference="$path" -- "$tmp" 2>/dev/null
   fi
-  mv -f -- "$tmp" "$path" || exit 1
-  trap - EXIT
+  # The replacement must also have the original owner and group. cp reports
+  # success when it cannot set them (a shared file owned by someone else, or
+  # a group the saver is not in), so check. The usual case, a file of ours
+  # in our group, is settled by test builtins without starting stat. If they
+  # differ, write the new content into the file itself instead: the same
+  # file keeps its owner, group, mode and ACL, at the cost of an atomic swap.
+  if { [ -O "$path" ] && [ -G "$path" ] && [ -O "$tmp" ] && [ -G "$tmp" ]; } \
+    || [ "$(stat -c %u:%g -- "$path")" = "$(stat -c %u:%g -- "$tmp")" ]; then
+    mv -f -- "$tmp" "$path" || exit 1
+    trap - EXIT
+  else
+    cat -- "$tmp" >"$path" || exit 1
+  fi
 ) 9<"$dir"
 case $? in
   0) ;;
