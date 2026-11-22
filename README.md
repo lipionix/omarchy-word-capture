@@ -3,8 +3,8 @@
 An Omarchy bar widget for collecting vocabulary. Click the book icon, type a
 word, optionally add context, press Enter. One Markdown line goes to the end
 of its language's section in your vocabulary file, and a toast confirms it with
-your counts, e.g. "Captured casa · 128 words · 42 Spanish" ("already had it"
-first when the word was in the file already). Click the toast to open the file.
+your counts, e.g. "128 words, 42 in Spanish" ("Already had it. 128 words, 42
+in Spanish" when the word was in the file already). Click the toast to open the file.
 
 ```markdown
 # Vocabulary            <- anything outside sections is left alone
@@ -21,12 +21,7 @@ first when the word was in the file already). Click the toast to open the file.
 
 A missing `## <Language>` section is created at the end of the file. The
 `[Language]` tag stays in every line, so a line moved elsewhere keeps its
-language. Older entries outside any section are never moved automatically; to
-group them once, run (a copy is kept as `<file>.bak`):
-
-```sh
-sh ~/.config/omarchy/plugins/alexander.word-capture/append.sh --group ~/Documents/word.md
-```
+language. Text outside sections (a title, notes) is left as it is.
 
 `\`, `*` and `_` in the word and the context are backslash-escaped, so
 `snake_case` or `**x**` cannot break the bold word. A multi-line context
@@ -41,7 +36,7 @@ stays one list line, its lines joined with ` / `.
 | Enter               | Capture (from the word or context field), close, toast |
 | Shift+Enter         | New line in the context field (grows to 5 lines, then scrolls) |
 | Esc / click outside | Close; the draft is kept for next time                 |
-| Settings (gear)     | Words file (type a path, or the folder icon to choose one, the file-plus icon to name a new one), clipboard prefill, languages |
+| Settings (gear)     | Words file (edit the path; the folder icon picks its folder and keeps the file name), clipboard prefill, languages |
 
 - **Already captured**: while you type, the word field's border takes the
   theme's yellow (`colors.toml` `yellow`, in the shell's normal border style)
@@ -55,7 +50,7 @@ stays one list line, its lines joined with ` / `.
 - **Language** is picked from the script of the word. In Settings each
   language is one line: name, script (Latin, Cyrillic, Greek, Arabic, Hebrew,
   Any, or Custom… with a character class such as `A-Za-zÀ-ÿ`), and a remove
-  button; drag the grip at the left of a line to reorder. Order is priority:
+  button, plus up/down buttons to reorder. Order is priority:
   when several languages match the word's script, the first one in the list is
   selected. Picking one by hand sticks for the current word.
 - **Errors** (no permission, path is a folder, ...) show under the Capture
@@ -107,13 +102,11 @@ Python: `append.sh` is plain `sh` + `awk` + `flock`.
 - `Model.js` — language detection and script presets, `entryLine()` (the one place that defines
   the line format), escaping, the words index (duplicates and counts per tag), clipboard cleanup.
 - `append.sh` — adds one line at the end of its `## <Language>` section
-  (`--touch` only creates the file, `--group` is the one-time migration):
+  (`--touch` only creates the file):
   expands `~`, resolves relative paths against `$HOME`, follows a symlink,
   creates missing folders, writes a temp file with the original's permissions
   and renames it over the file (atomic), locks the folder (`flock`) against
   concurrent writers. Plain `sh` + `awk`, no Python start-up.
-- `new-file.py` — the desktop save dialog (portal `SaveFile`) for New file;
-  Choose a file uses Omarchy's `omarchy-file-select`.
 - `tests/model.test.js` — logic tests: `node tests/model.test.js`.
 - `tests/append.test.sh` — file-writing tests: `sh tests/append.test.sh`.
 - State: `~/.local/state/omarchy/word-capture.json` (`filePath`, `languages`,
@@ -128,5 +121,5 @@ add `{ "id": "alexander.word-capture" }` to a bar section in
 `omarchy restart shell`: the shell notices local plugin changes, but a running
 shell can keep the previously compiled QML.
 
-Requires `wl-clipboard`, and `python3` with PyGObject for the New file dialog
-(all present on Omarchy).
+Requires `wl-clipboard` and Omarchy's `omarchy-file-select` (both present on
+Omarchy).

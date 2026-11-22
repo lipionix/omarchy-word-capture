@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "alexander.word-capture",
   "name": "Word Capture",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": "Alexander",
   "description": "Capture words and context into a Markdown vocabulary file.",
   "kinds": ["bar-widget"],
