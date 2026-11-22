@@ -37,9 +37,13 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string fileName: Model.fileName(filePath)
   readonly property string home: Quickshell.env("HOME")
-  // Normalized words already in the file, kept live by wordsFile below.
-  property var captured: ({})
-  readonly property bool alreadyCaptured: Model.isCaptured(captured, word)
+  // The words file's index (words, counts per tag), kept live by wordsFile below.
+  property var wordIndex: Model.emptyIndex()
+  property bool indexLoaded: false
+  property bool fileMissing: false
+  // Bumped when the index changes in place (after a save), so bindings re-read it.
+  property int indexVersion: 0
+  readonly property bool alreadyCaptured: indexVersion >= 0 && Model.isCaptured(wordIndex, word)
   property string themeYellow: ""
   // Nothing is read until the panel is first opened: the bar button alone
   // costs no file reads, parsing or watching.
@@ -115,9 +119,16 @@ Panel {
   function finish(ok, message) {
     writing = false
     if (!ok) { error = message || "Could not write to " + filePath; return }
-    notify("Captured " + word.trim(), fileName)
+    // Update the in-memory index right away for the toast's counts; the file
+    // watch re-syncs it from disk afterwards.
+    var stats = ""
+    if (indexLoaded) {
+      stats = Model.statsLine(Model.addWord(wordIndex, Model.normalizeWord(word), language), language)
+      indexVersion++
+    }
+    notify("Captured " + word.trim(), stats || fileName)
     // A file created by this capture had nothing to watch before it existed.
-    wordsFile.reload()
+    if (fileMissing) wordsFile.reload()
     word = ""
     context = ""
     pendingEntry = ""
@@ -202,8 +213,9 @@ Panel {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.captured = Model.capturedWords(text())
-    onLoadFailed: root.captured = ({})
+    onPathChanged: root.indexLoaded = false
+    onLoaded: { root.wordIndex = Model.wordIndex(text()); root.fileMissing = false; root.indexLoaded = true }
+    onLoadFailed: { root.wordIndex = Model.emptyIndex(); root.fileMissing = true; root.indexLoaded = true }
   }
 
   // A Process that reports once it has exited AND both streams have ended:

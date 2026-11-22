@@ -54,7 +54,7 @@ test("parses captured words from the file", () => {
     "- **two  words**",
     "",
   ].join("\n")
-  const set = M.capturedWords(file)
+  const set = M.wordIndex(file)
   assert.ok(M.isCaptured(set, "casa"))
   assert.ok(M.isCaptured(set, "  CASA "))
   assert.ok(M.isCaptured(set, "snake_case"))
@@ -68,7 +68,7 @@ test("parses captured words from the file", () => {
 
 test("a written line is found again", () => {
   for (const w of ["snake_case", "a*b", "back\\slash", "Ñandú", "two words"]) {
-    const set = M.capturedWords(M.entryLine({ text: w, note: "n_o*te", tag: "X" }))
+    const set = M.wordIndex(M.entryLine({ text: w, note: "n_o*te", tag: "X" }))
     assert.ok(M.isCaptured(set, w), w)
   }
 })
@@ -164,13 +164,35 @@ test("custom character sets are parsed safely", () => {
 })
 
 test("duplicate lookup normalizes Unicode and case", () => {
-  const set = M.capturedWords("- **Cafe\u0301**\n- **ЁЖ**\n- **Straße**\n")
+  const set = M.wordIndex("- **Cafe\u0301**\n- **ЁЖ**\n- **Straße**\n")
   assert.ok(M.isCaptured(set, "café"))                                     // NFD in file, NFC typed
   assert.ok(M.isCaptured(set, "ёж"))
   assert.ok(!M.isCaptured(set, "еж"))                                      // ё is not folded to е
   assert.ok(M.isCaptured(set, "STRASSE") === false)                        // no ß -> ss folding
   assert.ok(M.isCaptured(set, "straße"))
   assert.strictEqual(M.entryLine({ text: "cafe\u0301", note: "", tag: "" }), "- **caf\u00e9**\n")
+})
+
+test("index counts unique words per tag and builds the toast line", () => {
+  const index = M.wordIndex([
+    "# Words",
+    "- **casa** [Spanish] — house",
+    "- **Casa** [Spanish] — duplicate, not counted",
+    "- **perro** [Spanish]",
+    "- **house** [English]",
+    "- **untagged**",
+    "text with **bold** inside",
+  ].join("\n"))
+  assert.strictEqual(index.total, 4)
+  assert.strictEqual(index.byTag.Spanish, 2)
+  assert.strictEqual(index.byTag.English, 1)
+  const fresh = M.addWord(index, M.normalizeWord("gato"), "Spanish")
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(fresh)), { duplicate: false, total: 5, inTag: 3 })
+  assert.strictEqual(M.statsLine(fresh, "Spanish"), "5 words · 3 Spanish")
+  const again = M.addWord(index, M.normalizeWord("CASA"), "Spanish")
+  assert.strictEqual(M.statsLine(again, "Spanish"), "already had it · 5 words · 3 Spanish")
+  assert.strictEqual(M.statsLine(M.addWord(M.emptyIndex(), "w", ""), ""), "1 word")
+  assert.ok(M.isCaptured(index, "gato"))
 })
 
 console.log(passed + " passed")

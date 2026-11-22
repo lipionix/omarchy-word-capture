@@ -213,22 +213,54 @@ function normalizeWord(value) {
   return nfc(unescapeMarkdown(value)).trim().replace(/\s+/g, " ").toLowerCase()
 }
 
-// Every "- **word**" in the file, as a set of normalized words. Lines that
-// are not captures (headings, notes) are skipped.
-function capturedWords(text) {
-  var set = {}
-  var lines = String(text || "").split("\n")
-  var pattern = /^\s*[-*+]\s+\*\*((?:\\.|[^\\*])+)\*\*/
-  for (var i = 0; i < lines.length; i++) {
-    var match = pattern.exec(lines[i])
-    if (match) set[normalizeWord(match[1])] = true
-  }
-  return set
+// The words file as an index: every "- **word** [Tag]" line, by normalized
+// word (first occurrence wins), with unique-word counts in total and per tag.
+// Lines that are not captures (headings, notes) are skipped. Lookups are a
+// hash hit, so the per-keystroke cost does not grow with the file.
+function emptyIndex() {
+  return { words: {}, total: 0, byTag: {} }
 }
 
-function isCaptured(set, word) {
+function wordIndex(text) {
+  var index = emptyIndex()
+  var lines = String(text || "").split("\n")
+  var pattern = /^\s*[-*+]\s+\*\*((?:\\.|[^\\*])+)\*\*(?:\s*\[([^\]\n]*)\])?/
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i]
+    // Cheap pre-check before the regex: a capture line has "**" early on.
+    if (line.indexOf("**") < 0) continue
+    var match = pattern.exec(line)
+    if (match) addWord(index, normalizeWord(match[1]), match[2])
+  }
+  return index
+}
+
+// Record one word; returns { duplicate, total, inTag } after the change.
+function addWord(index, key, tag) {
+  var name = String(tag || "").trim()
+  var duplicate = key === "" || Object.prototype.hasOwnProperty.call(index.words, key)
+  if (!duplicate) {
+    index.words[key] = name
+    index.total++
+    if (name) index.byTag[name] = (index.byTag[name] || 0) + 1
+  }
+  return { duplicate: duplicate, total: index.total, inTag: name ? (index.byTag[name] || 0) : 0 }
+}
+
+function isCaptured(index, word) {
   var key = normalizeWord(word)
-  return key !== "" && set !== null && typeof set === "object" && set[key] === true
+  return key !== "" && !!index && !!index.words && Object.prototype.hasOwnProperty.call(index.words, key)
+}
+
+// The toast line after a save: "128 words · 42 Spanish", led by
+// "already had it" when the word was in the file before.
+function statsLine(result, tag) {
+  var parts = []
+  if (result.duplicate) parts.push("already had it")
+  parts.push(result.total + (result.total === 1 ? " word" : " words"))
+  var name = String(tag || "").trim()
+  if (name) parts.push(result.inTag + " " + name)
+  return parts.join(" · ")
 }
 
 // Clipboard text worth prefilling: the first non-empty line, single-spaced,
