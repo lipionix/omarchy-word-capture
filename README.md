@@ -36,7 +36,7 @@ stays one list line, its lines joined with ` / `.
 | Enter               | Capture (from the word or context field), close, toast |
 | Shift+Enter         | New line in the context field (grows to 5 lines, then scrolls) |
 | Esc / click outside | Close; the draft is kept for next time                 |
-| Settings (gear)     | Words file (edit the path; the folder icon picks its folder and keeps the file name), clipboard prefill, languages |
+| Settings (gear)     | Words file (edit the path; the folder icon picks its folder and keeps the file name; the panel comes back with the name selected), clipboard prefill, languages |
 
 - **Already captured**: while you type, the word field's border takes the
   theme's yellow (`colors.toml` `yellow`, in the shell's normal border style)
