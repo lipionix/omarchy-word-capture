@@ -225,14 +225,40 @@ function wordIndex(text) {
   var index = emptyIndex()
   var lines = String(text || "").split("\n")
   var pattern = /^\s*[-*+]\s+\*\*((?:\\.|[^\\*])+)\*\*(?:\s*\[([^\]\n]*)\])?/
+  // The language of a line is its [Tag], else the "## " section it sits in.
+  var section = ""
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i]
+    var h = headingOf(line)
+    if (h !== null) { section = h; continue }
     // Cheap pre-check before the regex: a capture line has "**" early on.
     if (line.indexOf("**") < 0) continue
     var match = pattern.exec(line)
-    if (match) addWord(index, normalizeWord(match[1]), match[2])
+    if (match) addWord(index, normalizeWord(match[1]), match[2] || section)
   }
   return index
+}
+
+// "## Spanish" -> "Spanish"; "# Title" -> "" (outside any section);
+// anything else (including "### sub") -> null, not a section boundary.
+function headingOf(line) {
+  var m = /^(#{1,2})(?:[ \t]+(.*?))?[ \t]*\r?$/.exec(line)
+  if (!m) return null
+  return m[1] === "##" ? (m[2] || "") : ""
+}
+
+// Capture lines that sit outside any "## " section (append.sh --group can
+// move the tagged ones into their sections).
+function ungroupedCount(text) {
+  var lines = String(text || "").split("\n")
+  var section = ""
+  var count = 0
+  for (var i = 0; i < lines.length; i++) {
+    var h = headingOf(lines[i])
+    if (h !== null) { section = h; continue }
+    if (!section && /^\s*[-*+]\s+\*\*/.test(lines[i])) count++
+  }
+  return count
 }
 
 // Record one word; returns { duplicate, total, inTag } after the change.

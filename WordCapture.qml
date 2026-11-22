@@ -40,7 +40,6 @@ Panel {
   // The words file's index (words, counts per tag), kept live by wordsFile below.
   property var wordIndex: Model.emptyIndex()
   property bool indexLoaded: false
-  property bool fileMissing: false
   // Bumped when the index changes in place (after a save), so bindings re-read it.
   property int indexVersion: 0
   readonly property bool alreadyCaptured: indexVersion >= 0 && Model.isCaptured(wordIndex, word)
@@ -116,7 +115,7 @@ Panel {
     appendProcess.running = true
   }
 
-  function finish(ok, message) {
+  function finish(ok, message, savedPath) {
     writing = false
     if (!ok) { error = message || "Could not write to " + filePath; return }
     // Update the in-memory index right away for the toast's counts; the file
@@ -126,9 +125,12 @@ Panel {
       stats = Model.statsLine(Model.addWord(wordIndex, Model.normalizeWord(word), language), language)
       indexVersion++
     }
-    notify("Captured " + word.trim(), stats || fileName)
-    // A file created by this capture had nothing to watch before it existed.
-    if (fileMissing) wordsFile.reload()
+    // Clicking the toast opens the file: the notification service runs the
+    // --exec argv itself on click, so no process waits for it.
+    notify("Captured " + word.trim(), stats || fileName, savedPath ? ["omarchy-launch-editor", savedPath] : null)
+    // The save replaced the file (temp + rename) or created it: re-read, which
+    // also re-arms the watch on the new file.
+    wordsFile.reload()
     word = ""
     context = ""
     pendingEntry = ""
@@ -136,9 +138,10 @@ Panel {
   }
 
   // Toasts go through omarchy-notification-send, as the built-in panels do.
-  function notify(headline, description) {
+  function notify(headline, description, clickArgv) {
     var argv = ["omarchy-notification-send", "-g", button.text, headline]
     if (description) argv.push(description)
+    if (clickArgv) argv = argv.concat(["--exec"], clickArgv)
     Util.execArgv(argv)
   }
 
@@ -214,8 +217,8 @@ Panel {
     printErrors: false
     onFileChanged: reload()
     onPathChanged: root.indexLoaded = false
-    onLoaded: { root.wordIndex = Model.wordIndex(text()); root.fileMissing = false; root.indexLoaded = true }
-    onLoadFailed: { root.wordIndex = Model.emptyIndex(); root.fileMissing = true; root.indexLoaded = true }
+    onLoaded: { root.wordIndex = Model.wordIndex(text()); root.indexLoaded = true }
+    onLoadFailed: { root.wordIndex = Model.emptyIndex(); root.indexLoaded = true }
   }
 
   // A Process that reports once it has exited AND both streams have ended:
@@ -239,8 +242,9 @@ Panel {
 
   Job {
     id: appendProcess
-    command: ["sh", root.pluginDir + "/append.sh", root.filePath, root.pendingEntry]
-    onDone: function(ok, output, errors) { root.finish(ok, errors) }
+    // The entry goes to the end of its "## <language>" section.
+    command: ["sh", root.pluginDir + "/append.sh", root.filePath, root.pendingEntry, root.language]
+    onDone: function(ok, output, errors) { root.finish(ok, errors, output.split("\n")[0]) }
   }
 
   // "-t text" asks for a text type; an image-only clipboard fails and is ignored.

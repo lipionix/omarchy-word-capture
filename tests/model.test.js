@@ -195,4 +195,19 @@ test("index counts unique words per tag and builds the toast line", () => {
   assert.ok(M.isCaptured(index, "gato"))
 })
 
+test("index takes the language from the tag or the section", () => {
+  const file = "# Vocabulary\n- **simple** [English] — test\n- **loose**\n\n## Spanish\n\n- **casa** [Spanish]\n- **perro**\n### notes\n- **gato**\n\n## C++ (old) [x]\n- **a**\n"
+  const index = M.wordIndex(file)
+  assert.strictEqual(index.total, 6)
+  assert.strictEqual(index.byTag["English"], 1)
+  assert.strictEqual(index.byTag["Spanish"], 3)          // tag, section, and under ###
+  assert.strictEqual(index.byTag["C++ (old) [x]"], 1)
+  assert.strictEqual(index.words["loose"], "")
+  assert.strictEqual(M.ungroupedCount(file), 2)
+  assert.strictEqual(M.headingOf("##   Spanish  "), "Spanish")
+  assert.strictEqual(M.headingOf("# Title"), "")
+  assert.strictEqual(M.headingOf("### sub"), null)
+  assert.strictEqual(M.headingOf("#hashtag"), null)
+})
+
 console.log(passed + " passed")
