@@ -4,6 +4,9 @@
 
 - Ready to publish: end-user README, this changelog, `sh tests/run.sh`.
 - Settings follow `XDG_STATE_HOME`.
+- Plugin id is now `lipionix.word-capture` (was `alexander.word-capture`);
+  repository `github.com/lipionix/omarchy-word-capture`.
+- MIT license.
 
 ## 1.3.x
 
