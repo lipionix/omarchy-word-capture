@@ -88,4 +88,22 @@ test("clipboard prefill text", () => {
   assert.strictEqual(M.clipboardWord("x".repeat(500)).length, 120)
 })
 
+test("script presets map to dropdown items", () => {
+  assert.strictEqual(M.scriptLabel("cyrillic"), "Cyrillic")
+  assert.strictEqual(M.scriptLabel("Latin"), "Latin")
+  assert.strictEqual(M.scriptLabel("any"), "Any")
+  assert.strictEqual(M.scriptLabel("A-Za-zÀ-ÿ"), "Custom…")
+  assert.strictEqual(M.scriptLabel(""), "Custom…")
+  assert.strictEqual(M.scriptValue("Greek"), "greek")
+  assert.strictEqual(M.scriptValue("Custom…"), "")
+  assert.deepStrictEqual(Array.from(M.scriptLabels()), ["Latin", "Cyrillic", "Greek", "Arabic", "Hebrew", "Any", "Custom…"])
+  for (const label of M.scriptLabels().slice(0, -1))
+    assert.strictEqual(M.scriptLabel(M.scriptValue(label)), label)
+})
+
+test("a custom class still detects", () => {
+  const langs = [{ name: "French", characters: "A-Za-zÀ-ÿ" }, { name: "Russian", characters: "cyrillic" }]
+  assert.deepStrictEqual(Array.from(M.detect("été", langs)), ["French"])
+})
+
 console.log(passed + " passed")

@@ -62,12 +62,36 @@ function detect(text, languages) {
   return result
 }
 
-var characterPresets = ["latin", "cyrillic", "greek", "arabic", "hebrew", "any"]
+// The script choices in Settings. Each maps to a characters value in state;
+// any other value is a custom character class.
+var scriptPresets = [
+  { label: "Latin", value: "latin" },
+  { label: "Cyrillic", value: "cyrillic" },
+  { label: "Greek", value: "greek" },
+  { label: "Arabic", value: "arabic" },
+  { label: "Hebrew", value: "hebrew" },
+  { label: "Any", value: "any" }
+]
+var customScript = "Custom…"
 
-function characterSuggestions(text) {
-  var query = safeText(text, 40).trim().toLowerCase()
-  if (!query) return characterPresets
-  return characterPresets.filter(function(name) { return name.indexOf(query) !== -1 })
+function scriptLabels() {
+  return scriptPresets.map(function(item) { return item.label }).concat([customScript])
+}
+
+// "cyrillic" -> "Cyrillic"; "A-Za-zÀ-ÿ" -> "Custom…".
+function scriptLabel(characters) {
+  var value = String(characters || "").trim().toLowerCase()
+  for (var i = 0; i < scriptPresets.length; i++)
+    if (scriptPresets[i].value === value) return scriptPresets[i].label
+  return customScript
+}
+
+// The characters value to store for a picked label; "" for Custom…, whose
+// class comes from its own field.
+function scriptValue(label) {
+  for (var i = 0; i < scriptPresets.length; i++)
+    if (scriptPresets[i].label === label) return scriptPresets[i].value
+  return ""
 }
 
 // Same rule as append.py: "~" is home, and a relative path is under home.

@@ -371,7 +371,7 @@ Panel {
         Column {
           visible: root.settingsOpen
           width: parent.width
-          spacing: Style.space(10)
+          spacing: Style.spacing.rowGap
           PanelSectionHeader { text: "MARKDOWN FILE"; foreground: root.foreground }
           TextField { width: parent.width; text: root.filePath; foreground: root.foreground; onEditingFinished: { root.filePath = text; root.saveState() } }
           Toggle {
@@ -383,71 +383,83 @@ Panel {
             fontFamily: root.fontFamily
             onClicked: { root.prefillClipboard = !root.prefillClipboard; root.saveState() }
           }
-          PanelSectionHeader { text: "DISTINGUISHABLE CHARACTERS"; foreground: root.foreground }
+          PanelSectionHeader { text: "LANGUAGES"; foreground: root.foreground }
           ListView {
             width: parent.width
             // Shrink to content; only scroll once the list is genuinely tall.
             height: Math.min(contentHeight, Style.space(260))
             model: root.languages
             clip: true
+            spacing: Style.spacing.rowGap
+            // One line per language: name, script, remove. A custom character
+            // class gets its own field under the line, only for Custom….
             delegate: Column {
               id: langRow
               property int langIndex: index
               property string langName: modelData.name
               property string langCharacters: modelData.characters
+              readonly property bool storedCustom: Model.scriptLabel(langCharacters) === Model.customScript
+              // Custom… picked but no class typed yet: nothing to save until there is.
+              property bool customPicked: false
+              readonly property bool isCustom: customPicked || storedCustom
               width: ListView.view.width
-              spacing: Style.space(6)
+              spacing: Style.spacing.rowGap
+
               Row {
                 width: parent.width
-                spacing: Style.space(6)
+                spacing: Style.spacing.controlGap
                 TextField {
                   id: nameField
-                  width: parent.width - Style.space(180)
+                  width: parent.width - scriptDropdown.width - removeButton.width - parent.spacing * 2
                   text: langRow.langName
+                  placeholderText: "Language"
                   foreground: root.foreground
                   onEditingFinished: {
                     if (text !== langRow.langName)
-                      root.updateLanguage(langRow.langIndex, text, charactersField.text)
+                      root.updateLanguage(langRow.langIndex, text, langRow.langCharacters)
                   }
                 }
-                TextField {
-                  id: charactersField
-                  width: Style.space(95)
-                  text: langRow.langCharacters
-                  foreground: root.foreground
-                  placeholderText: "Characters"
-                  onEditingFinished: {
-                    if (text !== langRow.langCharacters)
-                      root.updateLanguage(langRow.langIndex, nameField.text, text)
+                Dropdown {
+                  id: scriptDropdown
+                  width: Style.space(120)
+                  rowHeight: nameField.height
+                  showLabel: false
+                  value: langRow.isCustom ? Model.customScript : Model.scriptLabel(langRow.langCharacters)
+                  options: Model.scriptLabels()
+                  onChanged: function(value) {
+                    if (value === Model.customScript) {
+                      langRow.customPicked = true
+                      Qt.callLater(function() { customField.forceActiveFocus() })
+                      return
+                    }
+                    langRow.customPicked = false
+                    root.updateLanguage(langRow.langIndex, nameField.text, Model.scriptValue(value))
                   }
                 }
-                Button {
-                  width: Style.space(70)
-                  text: "REMOVE"
-                  fontSize: Style.font.bodySmall
+                PanelActionButton {
+                  id: removeButton
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconText: "󰅖"
+                  tooltipText: "Remove"
                   foreground: root.foreground
-                  verticalPadding: Style.spacing.controlPaddingY
-                  bordered: true
+                  hoverColor: root.urgent
+                  fontFamily: root.fontFamily
+                  focusable: true
+                  enabled: root.languages.length > 1
                   onClicked: root.removeLanguage(langRow.langIndex)
                 }
               }
-              // Live-filtered suggestions; a completed preset leaves one small pill.
-              Flow {
+              TextField {
+                id: customField
+                visible: langRow.isCustom
                 width: parent.width
-                spacing: Style.space(6)
-                Repeater {
-                  model: Model.characterSuggestions(charactersField.text)
-                  delegate: Button {
-                    text: modelData
-                    fontSize: Style.font.bodySmall
-                    foreground: root.foreground
-                    verticalPadding: Style.spacing.controlPaddingY
-                    bordered: true
-                    onClicked: {
-                      charactersField.text = modelData
-                      root.updateLanguage(langRow.langIndex, nameField.text, modelData)
-                    }
-                  }
+                text: langRow.storedCustom ? langRow.langCharacters : ""
+                placeholderText: "Character class, e.g. A-Za-zÀ-ÿ"
+                foreground: root.foreground
+                onEditingFinished: {
+                  var value = text.trim()
+                  if (value && value !== langRow.langCharacters)
+                    root.updateLanguage(langRow.langIndex, nameField.text, value)
                 }
               }
             }
@@ -461,7 +473,7 @@ Panel {
             bordered: true
             onClicked: { root.languages = root.languages.concat([{ name: "New language", characters: "any" }]); root.saveState() }
           }
-          Text { width: parent.width; text: "Distinguishable characters decide the language: latin, cyrillic, greek, arabic, hebrew, any, or a custom class such as A-Za-zÀ-ÿ."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+          Text { width: parent.width; text: "The script of the typed word picks its language. Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
         }
       }
     }
