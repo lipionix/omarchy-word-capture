@@ -41,6 +41,10 @@ Panel {
   property bool writing: false
   property string pendingEntry: ""
   property bool pendingDuplicate: false
+  // The submitted word and language: the fields can change while it saves,
+  // and the toast and counts must describe what was written.
+  property string pendingWord: ""
+  property string pendingLanguage: ""
   property string error: ""
   readonly property string pluginDir: decodeURIComponent(String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")).replace(/\/$/, "")
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
@@ -130,6 +134,8 @@ Panel {
     pendingEntry = Model.entryLine({ text: word, note: context, tag: language })
     // Decide "already had it" now, before the write can reach the index.
     pendingDuplicate = alreadyCaptured
+    pendingWord = word.trim()
+    pendingLanguage = language
     writing = true
     appendProcess.running = true
   }
@@ -137,16 +143,16 @@ Panel {
   function finish(ok, message, savedPath) {
     writing = false
     if (!ok) { error = message || "Could not write to " + filePath; return }
-    // Update the in-memory index right away for the toast's counts; the file
+    // Update the in-memory index right away for the toast's counts; the
     // single re-read below syncs it from disk.
     var stats = ""
     if (indexLoaded) {
-      stats = Model.statsLine(Model.recordCapture(wordIndex, Model.normalizeWord(word), language, pendingDuplicate), language)
+      stats = Model.statsLine(Model.recordCapture(wordIndex, Model.normalizeWord(pendingWord), pendingLanguage, pendingDuplicate), pendingLanguage)
       indexVersion++
     }
     // Clicking the toast opens the file: the notification service runs the
     // --exec argv itself on click, so no process waits for it.
-    notify("Captured " + word.trim(), stats || fileName, savedPath ? ["omarchy-launch-editor", savedPath] : null)
+    notify("Captured " + pendingWord, stats || fileName, savedPath ? ["omarchy-launch-editor", savedPath] : null)
     // The save replaced the file (temp + rename) or created it: re-read once,
     // which also re-arms the watch on the new file. Watch events from our own
     // write are skipped until this read lands.
@@ -155,6 +161,7 @@ Panel {
     word = ""
     context = ""
     pendingEntry = ""
+    pendingWord = ""
     close()
   }
 
@@ -319,7 +326,7 @@ Panel {
   Job {
     id: appendProcess
     // The entry goes to the end of its "## <language>" section.
-    command: ["sh", root.pluginDir + "/append.sh", root.filePath, root.pendingEntry, root.language]
+    command: ["sh", root.pluginDir + "/append.sh", root.filePath, root.pendingEntry, root.pendingLanguage]
     onDone: function(ok, output, errors) { root.finish(ok, errors, output.split("\n")[0]) }
   }
 
