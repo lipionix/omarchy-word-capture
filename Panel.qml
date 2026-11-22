@@ -138,7 +138,7 @@ Panel {
     writing = false
     if (!ok) { error = message || "Could not write to " + filePath; return }
     // Update the in-memory index right away for the toast's counts; the file
-    // watch re-syncs it from disk afterwards.
+    // single re-read below syncs it from disk.
     var stats = ""
     if (indexLoaded) {
       stats = Model.statsLine(Model.recordCapture(wordIndex, Model.normalizeWord(word), language, pendingDuplicate), language)
@@ -147,8 +147,10 @@ Panel {
     // Clicking the toast opens the file: the notification service runs the
     // --exec argv itself on click, so no process waits for it.
     notify("Captured " + word.trim(), stats || fileName, savedPath ? ["omarchy-launch-editor", savedPath] : null)
-    // The save replaced the file (temp + rename) or created it: re-read, which
-    // also re-arms the watch on the new file.
+    // The save replaced the file (temp + rename) or created it: re-read once,
+    // which also re-arms the watch on the new file. Watch events from our own
+    // write are skipped until this read lands.
+    ownReload = true
     wordsFile.reload()
     word = ""
     context = ""
@@ -236,16 +238,21 @@ Panel {
     onLoadFailed: root.themeYellow = ""
   }
 
+  // Set while our own save's re-read is pending (see finish()).
+  property bool ownReload: false
+
   // The words file, read and watched in-shell for the "Already captured" hint.
   FileView {
     id: wordsFile
     path: root.resolvedFilePath
     watchChanges: true
     printErrors: false
-    onFileChanged: reload()
+    // An outside edit re-reads; our own write is read once by finish().
+    onFileChanged: if (!root.writing && !root.ownReload) reload()
     onPathChanged: root.indexLoaded = false
-    onLoaded: { root.wordIndex = Model.wordIndex(text()); root.indexLoaded = true; root.fileMissing = false }
+    onLoaded: { root.ownReload = false; root.wordIndex = Model.wordIndex(text()); root.indexLoaded = true; root.fileMissing = false }
     onLoadFailed: function(error) {
+      root.ownReload = false
       root.wordIndex = Model.emptyIndex()
       root.indexLoaded = true
       root.fileMissing = root.notFound(error)
