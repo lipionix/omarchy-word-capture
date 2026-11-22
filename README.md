@@ -109,17 +109,20 @@ is, and a file with Windows (CRLF) line endings keeps them on new lines too.
 
 `*`, `_` and `\` in an entry are escaped so they cannot break the Markdown.
 Context with several lines is saved on one line, its lines joined with ` / `.
-Saving is atomic and locked, so the file is never left half-written, and it
-keeps the file's permissions, access list (ACL), owner and group. In a shared
-folder where the new file could not get the same owner or group, the entry is
-written into the existing file instead.
+Saving is locked, so two saves never mix. The new content is built in full
+first and then written into the same file, so the file keeps its owner,
+group, permissions and access list (ACL); a new file is created private
+(readable only by you). The trade-off: if the write itself is cut off (power
+loss, a full disk), the file can be left truncated, so keep a backup of a
+notebook you care about.
 
 ## Privacy
 
 Word Capture reads only the file you set and its own settings. With
 *Prefill from clipboard* on, it reads the clipboard (`wl-paste`) each time
 the panel opens; the text is used only to fill the field and is not stored
-unless you save it. Nothing is sent anywhere.
+unless you save it. Nothing is sent anywhere. A words file it creates is
+readable only by you; an existing file keeps its permissions and access list.
 
 ## Uninstall
 
@@ -143,8 +146,8 @@ The second line removes the settings. Your words file is never touched.
 - **Cost.** Until the first click the bar holds only the icon: the panel,
   file reads and watches are created then, and Settings when first opened.
   After that the file is watched and re-read only when it changes (about 2 ms
-  per thousand entries), once per save. A save runs `sh` and five small
-  programs (`flock`, `mktemp`, `awk`, `cp`, `mv`).
+  per thousand entries), once per save. A save runs `sh`, `flock` and
+  `awk`, and writes no temporary file.
 - **Settings file.** `${XDG_STATE_HOME:-~/.local/state}/omarchy/word-capture.json`.
   Missing or unreadable settings fall back to the defaults.
 
@@ -154,13 +157,12 @@ The second line removes the settings. Your words file is never touched.
 - `Panel.qml`: the panel, built from the shell's own components.
 - `Model.js`: language detection, entry format, duplicate index, clipboard
   cleanup.
-- `append.sh`: writes one entry into its section (temp file, atomic rename,
-  `flock`).
+- `append.sh`: writes one entry into its section, in place, under `flock`.
 - Tests: `sh tests/run.sh` runs the logic tests (needs `node`) and the
   writer tests (under `sh`, and `bash` when installed), then prints one
   summary line; the exit status is non-zero on any failure.
 - Performance check, not part of the default run: `sh tests/perf.sh` (or
-  `sh tests/run.sh --perf`) counts the programs one save starts (budget: five
+  `sh tests/run.sh --perf`) counts the programs one save starts (budget: two
   besides `sh`) and times saves into a 5000-line file.
 - After editing the QML, run `omarchy restart shell`.
 

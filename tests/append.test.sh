@@ -28,7 +28,8 @@ says() {
 }
 skip() { skip_reason=$1; }
 save() { $SH "$here/append.sh" "$@" >/dev/null || fail "append.sh $* failed"; }
-no_temp_files() { ok "no temp file left in $(basename "$1")" [ -z "$(ls -A "$1" | grep '^\.word-capture')" ]; }
+no_stray_files() { ok "no hidden file left in $(basename "$1")" [ -z "$(ls -A "$1" | grep '^\.')" ]; }
+inode() { stat -c %i "$1"; }
 
 t_new_file_gets_a_section() {
   save "$D/w.md" "- **casa** [Spanish]" Spanish
@@ -36,7 +37,7 @@ t_new_file_gets_a_section() {
 
 - **casa** [Spanish]
 "
-  no_temp_files "$D"
+  no_stray_files "$D"
 }
 
 t_entry_goes_to_the_end_of_its_section() {
@@ -239,10 +240,24 @@ t_symlink_is_followed() {
   ok "target created" [ -f "$D/later.md" ]
 }
 
-t_permissions_are_kept() {
-  printf '## A\n' >"$D/w.md"; chmod 640 "$D/w.md"
+# A save writes into the same file, so whatever protects it stays.
+t_same_file_keeps_its_mode() {
+  printf '## A\n' >"$D/w.md"; chmod 640 "$D/w.md"; before=$(inode "$D/w.md")
   save "$D/w.md" "- **x** [A]" A
+  ok "same file" [ "$(inode "$D/w.md")" = "$before" ]
   ok "mode stays 640" [ "$(stat -c %a "$D/w.md")" = 640 ]
+  same "$D/w.md" "## A
+
+- **x** [A]
+"
+  no_stray_files "$D"
+}
+
+t_new_file_is_private() {
+  (umask 022; save "$D/w.md" "- **x** [A]" A)
+  ok "mode 600" [ "$(stat -c %a "$D/w.md")" = 600 ]
+  (umask 022; save --touch "$D/t.md")
+  ok "touched file mode 600" [ "$(stat -c %a "$D/t.md")" = 600 ]
 }
 
 # A group the user is in other than the primary one, for files that belong
@@ -251,37 +266,13 @@ other_group() {
   for g in $(id -G); do [ "$g" != "$(id -g)" ] && { echo "$g"; return; }; done
 }
 
-t_group_is_kept() {
+t_same_file_keeps_its_group() {
   g=$(other_group); [ -n "$g" ] || { skip "user is in only one group"; return; }
-  printf '## A\n' >"$D/w.md"; chgrp "$g" "$D/w.md"; chmod 640 "$D/w.md"
+  printf '## A\n' >"$D/w.md"; chgrp "$g" "$D/w.md"; chmod 640 "$D/w.md"; before=$(inode "$D/w.md")
   save "$D/w.md" "- **x** [A]" A
+  ok "same file" [ "$(inode "$D/w.md")" = "$before" ]
   ok "group unchanged" [ "$(stat -c %g "$D/w.md")" = "$g" ]
   ok "mode unchanged" [ "$(stat -c %a "$D/w.md")" = 640 ]
-}
-
-# Where the new file cannot get the original group (in a shared folder, a
-# group the saver is not in), the save must not hand the notes to the saver's
-# group. Simulated with a cp that copies everything but owner and group.
-t_group_that_cannot_be_kept_stays_with_the_file() {
-  g=$(other_group); [ -n "$g" ] || { skip "user is in only one group"; return; }
-  [ "$(id -u)" = 0 ] && { skip "running as root"; return; }
-  mkdir "$D/bin"
-  printf '#!/bin/sh\nfor a; do shift; case $a in --preserve=*) set -- "$@" --preserve=mode ;; *) set -- "$@" "$a" ;; esac; done\nexec %s "$@"\n' "$(command -v cp)" >"$D/bin/cp"
-  chmod +x "$D/bin/cp"
-  printf '## A\n\n- **old** [A]\n' >"$D/w.md"; chgrp "$g" "$D/w.md"; chmod 640 "$D/w.md"
-  inode=$(stat -c %i "$D/w.md")
-  saved_path=$PATH; PATH="$D/bin:$PATH"
-  save "$D/w.md" "- **new** [A]" A
-  PATH=$saved_path
-  ok "group unchanged" [ "$(stat -c %g "$D/w.md")" = "$g" ]
-  ok "mode unchanged" [ "$(stat -c %a "$D/w.md")" = 640 ]
-  ok "same file, not a replacement" [ "$(stat -c %i "$D/w.md")" = "$inode" ]
-  same "$D/w.md" "## A
-
-- **old** [A]
-- **new** [A]
-"
-  no_temp_files "$D"
 }
 
 acl_ready() {
@@ -289,27 +280,12 @@ acl_ready() {
     && printf '## A\n' >"$1" && chmod 640 "$1" && setfacl -m u:nobody:--- "$1" 2>/dev/null
 }
 
-t_access_list_is_kept() {
+t_same_file_keeps_its_access_list() {
   acl_ready "$D/w.md" || { skip "no setfacl or no ACL support in $(dirname "$T")"; return; }
-  before=$(getfacl -cp "$D/w.md")
+  before=$(getfacl -cp "$D/w.md"); node=$(inode "$D/w.md")
   save "$D/w.md" "- **x** [A]" A
+  ok "same file" [ "$(inode "$D/w.md")" = "$node" ]
   ok "ACL unchanged" [ "$(getfacl -cp "$D/w.md")" = "$before" ]
-}
-
-# A folder where file attributes cannot be copied (as on FAT) is simulated
-# with a cp that always fails.
-t_access_list_that_cannot_be_kept_stops_the_save() {
-  acl_ready "$D/w.md" || { skip "no setfacl or no ACL support in $(dirname "$T")"; return; }
-  mkdir "$D/bin"; printf '#!/bin/sh\nexit 1\n' >"$D/bin/cp"; chmod +x "$D/bin/cp"
-  cp "$D/w.md" "$D/copy"
-  saved_path=$PATH; PATH="$D/bin:$PATH"
-  says "Cannot keep the file's access list: $D/w.md" "$D/w.md" "- **y** [A]" A
-  ok "file untouched" cmp -s "$D/w.md" "$D/copy"
-  printf '## A\n' >"$D/plain.md"; chmod 604 "$D/plain.md"
-  save "$D/plain.md" "- **y** [A]" A
-  PATH=$saved_path
-  ok "without an ACL the mode still carries over" [ "$(stat -c %a "$D/plain.md")" = 604 ]
-  no_temp_files "$D"
 }
 
 t_concurrent_saves_lose_nothing() {
@@ -319,7 +295,7 @@ t_concurrent_saves_lose_nothing() {
   ok "30 entries" [ "$(grep -c '^- \*\*w' "$D/w.md")" = 30 ]
   ok "3 sections" [ "$(grep -c '^## ' "$D/w.md")" = 3 ]
   ok "each section once" [ "$(grep '^## ' "$D/w.md" | sort -u | wc -l)" = 3 ]
-  no_temp_files "$D"
+  no_stray_files "$D"
 }
 
 t_blank_entry_is_refused() {
@@ -341,7 +317,15 @@ t_unwritable_targets_are_reported() {
   mkdir "$D/locked"; chmod 555 "$D/locked"
   says "Cannot create folder: $D/locked/sub" "$D/locked/sub/w.md" "- **x** [A]" A
   chmod 755 "$D/locked"
-  no_temp_files "$D"
+  # The new content is complete before the file is opened for writing: a
+  # file that cannot be read is refused, not emptied.
+  printf '## A\n- **keep**\n' >"$D/wo.md"; chmod 200 "$D/wo.md"
+  says "Could not write: $D/wo.md" "$D/wo.md" "- **x** [A]" A
+  chmod 600 "$D/wo.md"
+  same "$D/wo.md" "## A
+- **keep**
+"
+  no_stray_files "$D"
 }
 
 # Every t_ function above, in order. A function missing here fails the run.
@@ -353,9 +337,8 @@ t_non_latin_heading_case_must_match t_heading_without_a_name_ends_a_section
 t_crlf_files_stay_crlf t_empty_section_gets_a_blank_line_first
 t_no_section_appends_literal_text t_multi_line_input_becomes_one_line
 t_missing_folders_are_created t_touch_creates_an_empty_file_only
-t_prints_the_resolved_path t_symlink_is_followed t_permissions_are_kept
-t_group_is_kept t_group_that_cannot_be_kept_stays_with_the_file
-t_access_list_is_kept t_access_list_that_cannot_be_kept_stops_the_save
+t_prints_the_resolved_path t_symlink_is_followed t_same_file_keeps_its_mode t_new_file_is_private
+t_same_file_keeps_its_group t_same_file_keeps_its_access_list
 t_concurrent_saves_lose_nothing t_blank_entry_is_refused
 t_folder_paths_are_refused t_unwritable_targets_are_reported"
 

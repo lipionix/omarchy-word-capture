@@ -153,8 +153,8 @@ Panel {
     // Clicking the toast opens the file: the notification service runs the
     // --exec argv itself on click, so no process waits for it.
     notify("Captured " + pendingWord, stats || fileName, savedPath ? ["omarchy-launch-editor", savedPath] : null)
-    // The save replaced the file (temp + rename) or created it: re-read once,
-    // which also re-arms the watch on the new file. Watch events from our own
+    // The save rewrote the file or created it: re-read once, which also arms
+    // the watch on a file that did not exist before. Watch events from our own
     // write are skipped until this read lands.
     ownReload = true
     wordsFile.reload()

@@ -8,11 +8,12 @@
 #
 # Arguments arrive as argv and reach awk through the environment, so nothing in
 # them is parsed as code. "~" expands and a relative path resolves against
-# $HOME; a symlink is followed. Missing folders are created. The new content is
-# written to a temp file in the same folder, given the original's mode bits,
-# access list (POSIX ACL), owner and group, and renamed over it (atomic). If
-# the owner or group cannot be carried over, the content is written into the
-# original file instead. Either way a save never widens who can read it. A lock on the folder serialises writers.
+# $HOME; a symlink is followed. Missing folders are created; a new file is
+# private (0600). Under a lock on the folder, which serialises writers, the
+# new content is built in memory and written back into the same file: no
+# rename and no new file, so its owner, group, mode and ACL never change. The
+# trade-off: if the write is cut off (power loss, full disk), the file can be
+# left truncated.
 # Prints the resolved path; on failure one short line on stderr and exit 1.
 set -u
 
@@ -39,23 +40,23 @@ case $path in
 esac
 [ -L "$path" ] && path=$(readlink -f -- "$path")
 
-# Only builtins up to the lock: a save runs sh, flock, mktemp, awk, cp
-# and mv (plus mkdir for a new folder, readlink for a symlink).
+# A save runs sh, flock and awk (plus mkdir for a new folder, readlink for a
+# symlink).
 case $path in */) fail "Is a directory: $path" ;; esac
 [ -d "$path" ] && fail "Is a directory: $path"
 dir=${path%/*}
 [ -n "$dir" ] || dir=/
 [ -d "$dir" ] || mkdir -p -- "$dir" 2>/dev/null || fail "Cannot create folder: $dir"
-true 2>/dev/null >>"$path" || fail "Permission denied: $path"
+(umask 077; true >>"$path") 2>/dev/null || fail "Permission denied: $path"
 
 if [ "$mode" = touch ]; then printf '%s\n' "$path"; exit 0; fi
 
 (
   flock 9 || exit 1
-  tmp=$(mktemp -- "$dir/.word-capture.XXXXXX") || exit 1
-  trap 'rm -f -- "$tmp"' EXIT
-  # The C locale makes tolower() fold A-Z only, the same in every awk.
-  LC_ALL=C WC_LINE=$line WC_SECTION=$section awk '
+  # The whole new content first ("x" keeps trailing newlines through $(...)),
+  # then one write into the file. The C locale makes tolower() fold A-Z
+  # only, the same in every awk.
+  content=$(LC_ALL=C WC_LINE=$line WC_SECTION=$section awk '
     function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
     # One line: newlines become spaces, outer whitespace goes.
     function oneLine(s) { gsub(/\n/, " ", s); sub(/^[ \t\r\v\f]+/, "", s); sub(/[ \t\r\v\f]+$/, "", s); return s }
@@ -100,32 +101,8 @@ if [ "$mode" = touch ]; then printf '%s\n' "$path"; exit 0; fi
       if (at == start) { for (i = 1; i <= start; i++) keep(i); put(""); put(entry); for (i = start + 1; i <= n; i++) keep(i); exit }
       for (i = 1; i <= n; i++) { keep(i); if (i == at) put(entry) }
     }
-  ' "$path" >"$tmp" || exit 1
-  # The temp file starts private (0600). cp copies mode and ACL in one go;
-  # where that fails (a filesystem without permissions, like FAT), plain mode
-  # bits do, unless the file has an ACL that would be lost: then stop.
-  if ! cp --attributes-only --preserve=mode,ownership -- "$path" "$tmp" 2>/dev/null; then
-    case $(ls -ld -- "$path") in ??????????+*) exit 3 ;; esac
-    chmod --reference="$path" -- "$tmp" 2>/dev/null
-  fi
-  # The replacement must also have the original owner and group. cp reports
-  # success when it cannot set them (a shared file owned by someone else, or
-  # a group the saver is not in), so check. The usual case, a file of ours
-  # in our group, is settled by test builtins without starting stat. If they
-  # differ, write the new content into the file itself instead: the same
-  # file keeps its owner, group, mode and ACL, at the cost of an atomic swap.
-  if { [ -O "$path" ] && [ -G "$path" ] && [ -O "$tmp" ] && [ -G "$tmp" ]; } \
-    || [ "$(stat -c %u:%g -- "$path")" = "$(stat -c %u:%g -- "$tmp")" ]; then
-    mv -f -- "$tmp" "$path" || exit 1
-    trap - EXIT
-  else
-    cat -- "$tmp" >"$path" || exit 1
-  fi
-) 9<"$dir"
-case $? in
-  0) ;;
-  3) fail "Cannot keep the file's access list: $path" ;;
-  *) fail "Could not write: $path" ;;
-esac
+  ' "$path" 2>/dev/null && echo x) || exit 1
+  printf '%s' "${content%x}" >"$path" || exit 1
+) 9<"$dir" || fail "Could not write: $path"
 
 printf '%s\n' "$path"
