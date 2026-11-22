@@ -32,6 +32,9 @@ Panel {
   // then the first matching language in list order wins.
   property bool languagePicked: false
   property bool settingsOpen: false
+  // Set on the first open of Settings, which builds them (see settingsLoader).
+  property bool settingsBuilt: false
+  onSettingsOpenChanged: if (settingsOpen) settingsBuilt = true
   property bool prefillClipboard: false
   // Which field the clipboard fills: "word" (default) or "context".
   property string prefillTarget: "word"
@@ -368,7 +371,7 @@ Panel {
     content: PanelKeyCatcher {
       id: keyCatcher
       property alias wordField: wordField
-      property alias pathField: pathField
+      readonly property var pathField: settingsLoader.item ? settingsLoader.item.pathField : null
       property alias contextField: contextField
       anchors.fill: parent
       implicitHeight: contentColumn.implicitHeight
@@ -657,212 +660,221 @@ Panel {
           }
         }
 
-        Column {
-          visible: root.settingsOpen
+        // Settings are built the first time they are opened, then kept.
+        Loader {
+          id: settingsLoader
           width: parent.width
-          spacing: Style.spacing.rowGap
-          // Header row like LANGUAGE: the "new file" hint sits on the right.
-          Row {
-            width: parent.width
-            spacing: Style.space(8)
-            PanelSectionHeader { width: parent.width - Style.space(200); text: "MARKDOWN FILE"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
-            Text {
-              width: Style.space(192)
-              // Opacity, not visibility: the row keeps its height either way.
-              opacity: root.pathMissing ? 1 : 0
-              textFormat: Text.PlainText
-              text: "Created on first capture"
-              color: root.dim
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              elide: Text.ElideRight
-              horizontalAlignment: Text.AlignRight
-              anchors.verticalCenter: parent.verticalCenter
-            }
-          }
-          Row {
-            width: parent.width
-            spacing: Style.spacing.controlGap
-            TextField {
-              id: pathField
-              width: parent.width - folderButton.width - parent.spacing
-              text: root.filePath
-              foreground: root.foreground
-              onEditingFinished: root.setFilePath(text)
-              onTextChanged: if (activeFocus) { probeTimer.draft = text; probeTimer.restart() }
-              // After the folder chooser: select the file name (not its
-              // extension) so typing renames just the file.
-              onActiveFocusChanged: if (activeFocus && root.pathFocus) {
-                var range = Model.nameRange(text)
-                select(range[0], range[1])
-              }
-            }
-            PanelActionButton {
-              id: folderButton
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: "󰉖"
-              tooltipText: "Choose folder"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              focusable: true
-              enabled: !pickJob.running
-              onClicked: root.pickFolder()
-            }
-          }
-          Toggle {
-            width: parent.width
-            // Sized by the longer description (the hidden twin below), so
-            // switching Word/Context never changes the row's height.
-            height: prefillSizer.implicitHeight
-            label: "Prefill from clipboard"
-            description: root.prefillTarget === "context" ? prefillSizer.description : "Fills an empty word field on open."
-            checked: root.prefillClipboard
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            onClicked: { root.prefillClipboard = !root.prefillClipboard; root.saveState() }
-          }
-          Toggle {
-            id: prefillSizer
-            visible: false
-            width: parent.width
-            label: "Prefill from clipboard"
-            description: "Fills an empty context field on open."
-            fontFamily: root.fontFamily
-          }
-          Row {
-            visible: root.prefillClipboard
-            width: parent.width
-            spacing: Style.spacing.controlGap
-            PanelSectionHeader { text: "FILL"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
-            // Plain bordered Buttons, like the plugin's others; the chosen one
-            // carries the selected fill.
-            Repeater {
-              model: [{ value: "word", label: "WORD" }, { value: "context", label: "CONTEXT" }]
-              delegate: Button {
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.label
-                fontSize: Style.font.bodySmall
-                foreground: root.foreground
-                verticalPadding: Style.spacing.controlPaddingY
-                bordered: true
-                selected: root.prefillTarget === modelData.value
-                onClicked: { root.prefillTarget = modelData.value; root.saveState() }
-              }
-            }
-          }
-          PanelSectionHeader { text: "LANGUAGES"; foreground: root.foreground }
-          ListView {
-            width: parent.width
-            // Shrink to content; only scroll once the list is genuinely tall.
-            height: Math.min(contentHeight, Style.space(260))
-            model: root.languages
-            clip: true
-            spacing: Style.spacing.rowGap
-            // One line per language: name, script, remove. A custom character
-            // class gets its own field under the line, only for Custom….
-            delegate: Column {
-              id: langRow
-              property int langIndex: index
-              property string langName: modelData.name
-              property string langCharacters: modelData.characters
-              readonly property bool storedCustom: Model.scriptLabel(langCharacters) === Model.customScript
-              // Custom… picked but no class typed yet: nothing to save until there is.
-              property bool customPicked: false
-              readonly property bool isCustom: customPicked || storedCustom
-              width: ListView.view.width
+          active: root.settingsBuilt
+          visible: root.settingsOpen
+          sourceComponent: Component {
+            Column {
+              property alias pathField: pathField
+              width: parent ? parent.width : 0
               spacing: Style.spacing.rowGap
-
+              // Header row like LANGUAGE: the "new file" hint sits on the right.
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+                PanelSectionHeader { width: parent.width - Style.space(200); text: "MARKDOWN FILE"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
+                Text {
+                  width: Style.space(192)
+                  // Opacity, not visibility: the row keeps its height either way.
+                  opacity: root.pathMissing ? 1 : 0
+                  textFormat: Text.PlainText
+                  text: "Created on first capture"
+                  color: root.dim
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                  horizontalAlignment: Text.AlignRight
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+              }
               Row {
                 width: parent.width
                 spacing: Style.spacing.controlGap
                 TextField {
-                  id: nameField
-                  width: parent.width - scriptDropdown.width - rowActions.width - parent.spacing * 2
-                  text: langRow.langName
-                  placeholderText: "Language"
+                  id: pathField
+                  width: parent.width - folderButton.width - parent.spacing
+                  text: root.filePath
                   foreground: root.foreground
-                  onEditingFinished: {
-                    if (text !== langRow.langName)
-                      root.updateLanguage(langRow.langIndex, text, langRow.langCharacters)
+                  onEditingFinished: root.setFilePath(text)
+                  onTextChanged: if (activeFocus) { probeTimer.draft = text; probeTimer.restart() }
+                  // After the folder chooser: select the file name (not its
+                  // extension) so typing renames just the file.
+                  onActiveFocusChanged: if (activeFocus && root.pathFocus) {
+                    var range = Model.nameRange(text)
+                    select(range[0], range[1])
                   }
                 }
-                Dropdown {
-                  id: scriptDropdown
-                  width: Style.space(120)
-                  rowHeight: nameField.height
-                  showLabel: false
-                  value: langRow.isCustom ? Model.customScript : Model.scriptLabel(langRow.langCharacters)
-                  options: Model.scriptLabels()
-                  onChanged: function(value) {
-                    if (value === Model.customScript) {
-                      langRow.customPicked = true
-                      Qt.callLater(function() { customField.forceActiveFocus() })
-                      return
-                    }
-                    langRow.customPicked = false
-                    root.updateLanguage(langRow.langIndex, nameField.text, Model.scriptValue(value))
-                  }
-                }
-                // Order is priority among languages with the same script.
-                Row {
-                  id: rowActions
+                PanelActionButton {
+                  id: folderButton
                   anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.spacing.xs
-                  PanelActionButton {
-                    iconText: "󰅃"
-                    tooltipText: "Higher priority"
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    focusable: true
-                    enabled: langRow.langIndex > 0
-                    onClicked: root.moveLanguage(langRow.langIndex, -1)
-                  }
-                  PanelActionButton {
-                    iconText: "󰅀"
-                    tooltipText: "Lower priority"
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    focusable: true
-                    enabled: langRow.langIndex < root.languages.length - 1
-                    onClicked: root.moveLanguage(langRow.langIndex, 1)
-                  }
-                  PanelActionButton {
-                    iconText: "󰅖"
-                    tooltipText: "Remove"
-                    foreground: root.foreground
-                    hoverColor: root.urgent
-                    fontFamily: root.fontFamily
-                    focusable: true
-                    enabled: root.languages.length > 1
-                    onClicked: root.removeLanguage(langRow.langIndex)
-                  }
+                  iconText: "󰉖"
+                  tooltipText: "Choose folder"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  focusable: true
+                  enabled: !pickJob.running
+                  onClicked: root.pickFolder()
                 }
               }
-              TextField {
-                id: customField
-                visible: langRow.isCustom
+              Toggle {
                 width: parent.width
-                text: langRow.storedCustom ? langRow.langCharacters : ""
-                placeholderText: "Character class, e.g. A-Za-zÀ-ÿ"
+                // Sized by the longer description (the hidden twin below), so
+                // switching Word/Context never changes the row's height.
+                height: prefillSizer.implicitHeight
+                label: "Prefill from clipboard"
+                description: root.prefillTarget === "context" ? prefillSizer.description : "Fills an empty word field on open."
+                checked: root.prefillClipboard
                 foreground: root.foreground
-                onEditingFinished: {
-                  var value = text.trim()
-                  if (value && value !== langRow.langCharacters)
-                    root.updateLanguage(langRow.langIndex, nameField.text, value)
+                fontFamily: root.fontFamily
+                onClicked: { root.prefillClipboard = !root.prefillClipboard; root.saveState() }
+              }
+              Toggle {
+                id: prefillSizer
+                visible: false
+                width: parent.width
+                label: "Prefill from clipboard"
+                description: "Fills an empty context field on open."
+                fontFamily: root.fontFamily
+              }
+              Row {
+                visible: root.prefillClipboard
+                width: parent.width
+                spacing: Style.spacing.controlGap
+                PanelSectionHeader { text: "FILL"; foreground: root.foreground; anchors.verticalCenter: parent.verticalCenter }
+                // Plain bordered Buttons, like the plugin's others; the chosen one
+                // carries the selected fill.
+                Repeater {
+                  model: [{ value: "word", label: "WORD" }, { value: "context", label: "CONTEXT" }]
+                  delegate: Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.label
+                    fontSize: Style.font.bodySmall
+                    foreground: root.foreground
+                    verticalPadding: Style.spacing.controlPaddingY
+                    bordered: true
+                    selected: root.prefillTarget === modelData.value
+                    onClicked: { root.prefillTarget = modelData.value; root.saveState() }
+                  }
                 }
               }
+              PanelSectionHeader { text: "LANGUAGES"; foreground: root.foreground }
+              ListView {
+                width: parent.width
+                // Shrink to content; only scroll once the list is genuinely tall.
+                height: Math.min(contentHeight, Style.space(260))
+                model: root.languages
+                clip: true
+                spacing: Style.spacing.rowGap
+                // One line per language: name, script, remove. A custom character
+                // class gets its own field under the line, only for Custom….
+                delegate: Column {
+                  id: langRow
+                  property int langIndex: index
+                  property string langName: modelData.name
+                  property string langCharacters: modelData.characters
+                  readonly property bool storedCustom: Model.scriptLabel(langCharacters) === Model.customScript
+                  // Custom… picked but no class typed yet: nothing to save until there is.
+                  property bool customPicked: false
+                  readonly property bool isCustom: customPicked || storedCustom
+                  width: ListView.view.width
+                  spacing: Style.spacing.rowGap
+
+                  Row {
+                    width: parent.width
+                    spacing: Style.spacing.controlGap
+                    TextField {
+                      id: nameField
+                      width: parent.width - scriptDropdown.width - rowActions.width - parent.spacing * 2
+                      text: langRow.langName
+                      placeholderText: "Language"
+                      foreground: root.foreground
+                      onEditingFinished: {
+                        if (text !== langRow.langName)
+                          root.updateLanguage(langRow.langIndex, text, langRow.langCharacters)
+                      }
+                    }
+                    Dropdown {
+                      id: scriptDropdown
+                      width: Style.space(120)
+                      rowHeight: nameField.height
+                      showLabel: false
+                      value: langRow.isCustom ? Model.customScript : Model.scriptLabel(langRow.langCharacters)
+                      options: Model.scriptLabels()
+                      onChanged: function(value) {
+                        if (value === Model.customScript) {
+                          langRow.customPicked = true
+                          Qt.callLater(function() { customField.forceActiveFocus() })
+                          return
+                        }
+                        langRow.customPicked = false
+                        root.updateLanguage(langRow.langIndex, nameField.text, Model.scriptValue(value))
+                      }
+                    }
+                    // Order is priority among languages with the same script.
+                    Row {
+                      id: rowActions
+                      anchors.verticalCenter: parent.verticalCenter
+                      spacing: Style.spacing.xs
+                      PanelActionButton {
+                        iconText: "󰅃"
+                        tooltipText: "Higher priority"
+                        foreground: root.foreground
+                        fontFamily: root.fontFamily
+                        focusable: true
+                        enabled: langRow.langIndex > 0
+                        onClicked: root.moveLanguage(langRow.langIndex, -1)
+                      }
+                      PanelActionButton {
+                        iconText: "󰅀"
+                        tooltipText: "Lower priority"
+                        foreground: root.foreground
+                        fontFamily: root.fontFamily
+                        focusable: true
+                        enabled: langRow.langIndex < root.languages.length - 1
+                        onClicked: root.moveLanguage(langRow.langIndex, 1)
+                      }
+                      PanelActionButton {
+                        iconText: "󰅖"
+                        tooltipText: "Remove"
+                        foreground: root.foreground
+                        hoverColor: root.urgent
+                        fontFamily: root.fontFamily
+                        focusable: true
+                        enabled: root.languages.length > 1
+                        onClicked: root.removeLanguage(langRow.langIndex)
+                      }
+                    }
+                  }
+                  TextField {
+                    id: customField
+                    visible: langRow.isCustom
+                    width: parent.width
+                    text: langRow.storedCustom ? langRow.langCharacters : ""
+                    placeholderText: "Character class, e.g. A-Za-zÀ-ÿ"
+                    foreground: root.foreground
+                    onEditingFinished: {
+                      var value = text.trim()
+                      if (value && value !== langRow.langCharacters)
+                        root.updateLanguage(langRow.langIndex, nameField.text, value)
+                    }
+                  }
+                }
+              }
+              Button {
+                width: parent.width
+                text: "ADD LANGUAGE"
+                fontSize: Style.font.bodySmall
+                foreground: root.foreground
+                verticalPadding: Style.spacing.controlPaddingY
+                bordered: true
+                onClicked: { root.languages = root.languages.concat([{ name: "New language", characters: "any" }]); root.saveState() }
+              }
+              Text { width: parent.width; text: "The script of the typed word picks its language; the first match in this order wins. Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
             }
           }
-          Button {
-            width: parent.width
-            text: "ADD LANGUAGE"
-            fontSize: Style.font.bodySmall
-            foreground: root.foreground
-            verticalPadding: Style.spacing.controlPaddingY
-            bordered: true
-            onClicked: { root.languages = root.languages.concat([{ name: "New language", characters: "any" }]); root.saveState() }
-          }
-          Text { width: parent.width; text: "The script of the typed word picks its language; the first match in this order wins. Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
         }
       }
     }
