@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0
+
+- Lighter: the bar holds only the icon until the first click, which creates
+  the panel (`Panel.qml`); Settings are built when first opened.
+- The words file is parsed once after a save, and the language hints are
+  rebuilt only when they change.
+- A save runs six programs instead of twelve.
+- Already captured words are marked in the theme's urgent color, which the
+  shell uses for warnings; `colors.toml` is no longer read.
+
 ## 1.4.3
 
 - In Settings, the "Settings" subtitle no longer shows a link cursor; the
