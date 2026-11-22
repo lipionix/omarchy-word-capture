@@ -70,9 +70,12 @@ function characterSuggestions(text) {
   return characterPresets.filter(function(name) { return name.indexOf(query) !== -1 })
 }
 
-function markdownEntry(word, context, language) {
-  var w = safeText(word, 500).trim()
-  var c = safeText(context, 2000).trim().replace(/\r?\n/g, " ")
-  var l = safeText(language, 80).trim()
-  return "- **" + w + "**" + (l ? " [" + l + "]" : "") + (c ? " — " + c : "") + "\n"
+// The one place that decides how a capture looks in the Markdown file:
+// "- **text** [tag] — note". Takes named fields so the format can change
+// without touching the panel or the writer (append.py).
+function entryLine(fields) {
+  var text = safeText(fields.text, 500).trim().replace(/\r?\n/g, " ")
+  var note = safeText(fields.note, 2000).trim().replace(/\r?\n/g, " ")
+  var tag = safeText(fields.tag, 80).trim()
+  return "- **" + text + "**" + (tag ? " [" + tag + "]" : "") + (note ? " — " + note : "") + "\n"
 }

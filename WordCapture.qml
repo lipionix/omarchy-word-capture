@@ -22,13 +22,17 @@ Panel {
   property bool settingsOpen: false
   property bool writing: false
   property string pendingEntry: ""
+  property string error: ""
+  readonly property string pluginDir: decodeURIComponent(String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")).replace(/\/$/, "")
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
 
   // Reset view state on every open. onOpenedChanged alone proved unreliable
   // across shell restarts, so own the entry points the shell calls.
   function open() {
     settingsOpen = false
+    error = ""
     controller.show()
   }
   function close() {
@@ -60,15 +64,17 @@ Panel {
   }
 
   function submit() {
-    if (!word.trim() || !language.trim() || writing || !filePath.trim()) return
-    pendingEntry = Model.markdownEntry(word, context, language)
+    if (writing || !word.trim()) return
+    if (!filePath.trim()) { error = "Set a Markdown file in Settings."; return }
+    error = ""
+    pendingEntry = Model.entryLine({ text: word, note: context, tag: language })
     writing = true
     appendProcess.running = true
   }
 
-  function finish(ok) {
+  function finish(ok, message) {
     writing = false
-    if (!ok) return
+    if (!ok) { error = message || "Could not write to " + filePath; return }
     word = ""
     context = ""
     pendingEntry = ""
@@ -103,8 +109,22 @@ Panel {
 
   Process {
     id: appendProcess
-    command: ["python3", "-c", "from pathlib import Path; import sys; p=Path(sys.argv[1]).expanduser(); p.parent.mkdir(parents=True, exist_ok=True); f=p.open('a', encoding='utf-8'); f.write(sys.argv[2]); f.close()", root.filePath, root.pendingEntry]
-    onExited: function(exitCode) { root.finish(exitCode === 0) }
+    command: ["python3", root.pluginDir + "/append.py", root.filePath, root.pendingEntry]
+    // Exit and end-of-stderr have no guaranteed order: finish once both landed.
+    property int exitCode: -1
+    property bool errorsRead: false
+    function settle() {
+      if (exitCode < 0 || !errorsRead) return
+      root.finish(exitCode === 0, String(appendErrors.text || "").trim())
+      exitCode = -1
+      errorsRead = false
+    }
+    stderr: StdioCollector {
+      id: appendErrors
+      waitForEnd: true
+      onStreamFinished: { appendProcess.errorsRead = true; appendProcess.settle() }
+    }
+    onExited: function(code) { exitCode = code; settle() }
   }
 
   BarIconButton {
@@ -197,7 +217,7 @@ Panel {
             text: root.word
             placeholderText: "Type a word or phrase"
             foreground: root.foreground
-            onTextChanged: { root.word = text; root.updateDetection() }
+            onTextChanged: { root.word = text; root.error = ""; root.updateDetection() }
             onAccepted: root.submit()
           }
 
@@ -255,6 +275,16 @@ Panel {
             active: true
             enabled: !root.writing
             onClicked: root.submit()
+          }
+          Text {
+            visible: root.error !== ""
+            width: parent.width
+            textFormat: Text.PlainText
+            text: root.error
+            color: root.urgent
+            wrapMode: Text.Wrap
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
           }
         }
 
