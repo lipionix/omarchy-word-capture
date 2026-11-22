@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "alexander.word-capture",
+  "id": "lipionix.word-capture",
   "name": "Word Capture",
   "version": "1.4.0",
   "author": "Alexander Chernov",
   "license": "MIT",
+  "repository": "https://github.com/lipionix/omarchy-word-capture",
   "description": "Capture words and context into a Markdown vocabulary file.",
   "kinds": ["bar-widget"],
   "entryPoints": {

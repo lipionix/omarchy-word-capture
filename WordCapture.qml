@@ -9,7 +9,7 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "alexander.word-capture"
+  moduleName: "lipionix.word-capture"
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 

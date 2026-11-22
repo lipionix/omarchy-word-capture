@@ -10,11 +10,11 @@ and a notification confirms it.
 ## Install
 
 ```sh
-omarchy plugin add <repository-url> --enable
+omarchy plugin add https://github.com/lipionix/omarchy-word-capture --enable
 ```
 
 Pick a bar section when asked (it defaults to the right). To place it later:
-`omarchy plugin enable alexander.word-capture --section right`.
+`omarchy plugin enable lipionix.word-capture --section right`.
 
 Everything it needs ships with Omarchy: `sh`, `awk`, `flock`, `wl-paste`
 (wl-clipboard), `omarchy-file-select`, `omarchy-launch-editor` and
@@ -84,7 +84,7 @@ unless you save it. Nothing is sent anywhere.
 ## Uninstall
 
 ```sh
-omarchy plugin remove alexander.word-capture
+omarchy plugin remove lipionix.word-capture
 rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/word-capture.json"
 ```
 
