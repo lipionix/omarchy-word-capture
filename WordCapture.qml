@@ -19,6 +19,9 @@ Panel {
   property string filePath: Quickshell.env("HOME") + "/Documents/words.md"
   property var languages: Model.defaults()
   property var matches: []
+  // True once the language was picked by hand for the current word; until
+  // then the first matching language in list order wins.
+  property bool languagePicked: false
   property bool settingsOpen: false
   property bool prefillClipboard: false
   property bool writing: false
@@ -71,9 +74,24 @@ Panel {
     // Detect from the word field only: mixing in context would cancel a
     // script match whenever the two fields use different alphabets.
     matches = Model.detect(word, languages)
-    // Follow the first match. Keep the current language when it already
-    // matches, so manually picking one of several lookalikes sticks.
-    if (matches.length && matches.indexOf(language) === -1) language = matches[0]
+    if (!word.trim()) languagePicked = false
+    // List order is priority: the first match wins, unless a language was
+    // picked by hand for this word and still matches.
+    if (!matches.length) return
+    if (languagePicked && matches.indexOf(language) !== -1) return
+    languagePicked = false
+    language = matches[0]
+  }
+
+  function moveLanguage(index, delta) {
+    var target = index + delta
+    if (target < 0 || target >= languages.length) return
+    var next = languages.slice()
+    var item = next.splice(index, 1)[0]
+    next.splice(target, 0, item)
+    languages = Model.normalizeLanguages(next)
+    saveState()
+    updateDetection()
   }
 
   function submit() {
@@ -355,7 +373,7 @@ Panel {
             showLabel: false
             value: root.language
             options: root.languages.map(function(item) { return item.name })
-            onChanged: function(value) { root.language = value; root.saveState() }
+            onChanged: function(value) { root.languagePicked = true; root.language = value; root.saveState() }
           }
           // Dropdown.value becomes a local value once a user picks an option,
           // which breaks its binding to root.language. Re-apply every change
@@ -431,7 +449,7 @@ Panel {
                 spacing: Style.spacing.controlGap
                 TextField {
                   id: nameField
-                  width: parent.width - scriptDropdown.width - removeButton.width - parent.spacing * 2
+                  width: parent.width - scriptDropdown.width - rowActions.width - parent.spacing * 2
                   text: langRow.langName
                   placeholderText: "Language"
                   foreground: root.foreground
@@ -457,17 +475,39 @@ Panel {
                     root.updateLanguage(langRow.langIndex, nameField.text, Model.scriptValue(value))
                   }
                 }
-                PanelActionButton {
-                  id: removeButton
+                // Order is priority among languages with the same script.
+                Row {
+                  id: rowActions
                   anchors.verticalCenter: parent.verticalCenter
-                  iconText: "󰅖"
-                  tooltipText: "Remove"
-                  foreground: root.foreground
-                  hoverColor: root.urgent
-                  fontFamily: root.fontFamily
-                  focusable: true
-                  enabled: root.languages.length > 1
-                  onClicked: root.removeLanguage(langRow.langIndex)
+                  spacing: Style.spacing.xs
+                  PanelActionButton {
+                    iconText: "󰅃"
+                    tooltipText: "Higher priority"
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    focusable: true
+                    enabled: langRow.langIndex > 0
+                    onClicked: root.moveLanguage(langRow.langIndex, -1)
+                  }
+                  PanelActionButton {
+                    iconText: "󰅀"
+                    tooltipText: "Lower priority"
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    focusable: true
+                    enabled: langRow.langIndex < root.languages.length - 1
+                    onClicked: root.moveLanguage(langRow.langIndex, 1)
+                  }
+                  PanelActionButton {
+                    iconText: "󰅖"
+                    tooltipText: "Remove"
+                    foreground: root.foreground
+                    hoverColor: root.urgent
+                    fontFamily: root.fontFamily
+                    focusable: true
+                    enabled: root.languages.length > 1
+                    onClicked: root.removeLanguage(langRow.langIndex)
+                  }
                 }
               }
               TextField {
@@ -494,7 +534,7 @@ Panel {
             bordered: true
             onClicked: { root.languages = root.languages.concat([{ name: "New language", characters: "any" }]); root.saveState() }
           }
-          Text { width: parent.width; text: "The script of the typed word picks its language. Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+          Text { width: parent.width; text: "The script of the typed word picks its language; the first match in this order wins. Custom… takes a character class."; color: root.dim; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
         }
       }
     }

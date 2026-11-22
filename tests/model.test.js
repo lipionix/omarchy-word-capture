@@ -113,4 +113,10 @@ test("theme yellow from colors.toml", () => {
   assert.strictEqual(M.themeYellow(""), "")
 })
 
+test("matches follow list order (priority)", () => {
+  const langs = [{ name: "Spanish", characters: "latin" }, { name: "English", characters: "latin" }, { name: "Russian", characters: "cyrillic" }]
+  assert.deepStrictEqual(Array.from(M.detect("casa", langs)), ["Spanish", "English"])
+  assert.deepStrictEqual(Array.from(M.normalizeLanguages(langs)).map(l => l.name), ["Spanish", "English", "Russian"])
+})
+
 console.log(passed + " passed")
