@@ -7,6 +7,8 @@ and a notification confirms it.
 
 ![Word Capture panel](preview.png)
 
+![Word Capture settings](screenshots/settings.png)
+
 ## Install
 
 ```sh
